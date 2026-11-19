@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forja Elemental 2.0 — Auto-Battler Tático Roguelike</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">⚔</div>
+      <div class="brand-text">
+        <h1>FORJA ELEMENTAL<small>2.0</small></h1>
+        <span id="hud-act">Ato I • Floresta Cinzenta</span>
+      </div>
+    </div>
+    <div class="hud-group">
+      <div class="stat-pill"><span class="label">Sala</span><span class="value sky-text" id="hud-room">0 / 15</span></div>
+      <div class="stat-pill hp"><span class="label">Cidadela</span><span class="value crimson-text" id="hud-citadel">❤️ 100/100</span><div class="mini-bar"><div id="hud-citadel-bar" style="width:100%"></div></div></div>
+      <div class="stat-pill gold"><span class="label">Ouro</span><span class="value gold-text" id="hud-gold">150g</span></div>
+      <div class="comp-controller">
+        <div>
+          <div style="font-size:11px;font-weight:800;margin-bottom:3px;">Comp: <span id="hud-team" class="emerald-text">0 / 4</span></div>
+          <div class="comp-controls-row" id="comp-controls">
+            <button class="btn-mini" data-limit="-1" title="Diminuir limite">−</button>
+            <button class="btn-mini" data-preset="1">1</button><button class="btn-mini" data-preset="4">4</button><button class="btn-mini" data-preset="8">8</button><button class="btn-mini" data-preset="12">12</button><button class="btn-mini" data-preset="16">16</button>
+            <button class="btn-mini" data-limit="1" title="Aumentar limite">+</button>
+          </div>
+        </div>
+        <div class="xp-math-box">
+          <div class="xp-formula" id="hud-xp">Pool: 0 XP ÷ 1</div>
+          <span class="xp-strategy-tag" id="hud-strategy">—</span>
+        </div>
+      </div>
+      <div class="relics-bar" id="hud-relics"></div>
+      <button class="icon-btn" id="btn-map" data-tip="Ver o mapa do Ato (tecla M)">🗺️ Mapa <kbd>M</kbd></button>
+      <button class="icon-btn" id="btn-codex" data-tip="Códice: regras, unidades, relíquias, itens e notas da versão (tecla C)">📖 Códice</button>
+      <button class="icon-btn violet" id="btn-meta">🌌 <span id="hud-shards">0</span></button>
+      <button class="icon-btn" id="btn-settings" data-tip="Configurações">⚙️</button>
+      <button class="icon-btn" id="btn-menu" data-tip="Menu principal">☰</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel left-col">
+      <div class="panel-header">
+        <span class="panel-title">✦ Sinergias</span>
+        <div class="tabs" id="syn-tabs">
+          <button class="tab active" data-tab="el">Elementos</button>
+          <button class="tab" data-tab="ord">Ordens</button>
+        </div>
+      </div>
+      <div class="synergy-list" id="synergy-list"></div>
+      <div class="panel-header" style="margin-top:2px;">
+        <span class="panel-title">📜 Registro</span>
+        <span class="panel-subtitle" id="log-badge"></span>
+      </div>
+      <div class="combat-log" id="combat-log"></div>
+    </aside>
+
+    <section class="center-col">
+      <div class="board-panel">
+        <div class="board-topbar">
+          <span class="chip prep" id="phase-chip">Preparação</span>
+          <span class="chip" id="room-chip">—</span>
+          <span class="chip affix" id="affix-chip">🌿 Campo Neutro</span>
+        </div>
+        <div class="canvas-container" id="canvas-container">
+          <canvas id="battle-canvas"></canvas>
+          <div class="boss-bar" id="boss-bar"><div class="bb-name" id="bb-name"></div><div class="bb-track"><div class="bb-fill" id="bb-fill"></div><div class="bb-shield" id="bb-shield"></div></div></div>
+          <div class="board-overlay" id="board-overlay">
+            <p id="overlay-text">Organize sua composição e escolha o próximo caminho.</p>
+            <button class="btn btn-primary btn-lg" id="overlay-map-btn">🗺️ Escolher Caminho</button>
+          </div>
+        </div>
+        <div class="bench-wrapper">
+          <div class="bench-header">
+            <span>🪑 Banco de Reservas — arraste para o campo (não divide XP)</span>
+            <span id="bench-count">0 / 8</span>
+          </div>
+          <div class="bench-grid" id="bench-grid"></div>
+        </div>
+        <div class="battle-controls">
+          <button class="btn btn-primary" id="btn-start">⚔️ Iniciar Combate <kbd>Espaço</kbd></button>
+          <button class="btn btn-secondary" id="btn-speed">⏩ 1x <kbd>S</kbd></button>
+          <button class="btn btn-secondary" id="btn-arrange" data-tip="Tanques e lutadores na frente, atiradores e magos atrás (tecla A)">🧭 Auto-posicionar <kbd>A</kbd></button>
+          <button class="btn btn-evo" id="btn-evo" style="display:none;">⭐ Evoluir (<span id="evo-pts">0</span> PE) <kbd>E</kbd></button>
+        </div>
+      </div>
+      <div class="panel shop-panel" id="shop-panel">
+        <div class="panel-header">
+          <span class="panel-title">🏛️ Recrutamento Livre (9 Arquétipos • sem RNG)</span>
+          <span class="panel-subtitle">Clique para recrutar • arraste uma unidade aqui para vender</span>
+        </div>
+        <div class="shop-grid" id="shop-grid"></div>
+      </div>
+    </section>
+
+    <aside class="panel right-col">
+      <div class="panel-header">
+        <span class="panel-title">🔍 Inspetor</span>
+        <span class="panel-subtitle" id="inspector-sub">Selecione uma unidade</span>
+      </div>
+      <div id="inspector" style="display:flex;flex-direction:column;gap:8px;flex:1;"></div>
+      <div class="bag-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;font-weight:800;color:var(--gold-light);text-transform:uppercase;">🎒 Mochila (<span id="bag-count">0</span>)</span>
+          <span style="font-size:10px;color:var(--text-muted);">Clique p/ equipar • ⚒ funde 2 iguais</span>
+        </div>
+        <div class="bag-items-grid" id="bag-grid"></div>
+      </div>
+    </aside>
+  </main>
+  <div class="footer-note" id="footer-note"></div>
+
+  <div class="modal-backdrop" id="modal">
+    <div class="modal-card" id="modal-card">
+      <div class="modal-header">
+        <div><h2 id="modal-title"></h2><div class="sub" id="modal-sub"></div></div>
+        <button class="btn btn-secondary" id="modal-close">Fechar <kbd>Esc</kbd></button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <div id="tooltip"></div>
+  <div id="drag-ghost"></div>
+  <div class="toast-container" id="toasts"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

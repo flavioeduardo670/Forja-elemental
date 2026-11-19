@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.zip
+# Unity (futuro)
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild*/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+*.blend1
