@@ -235,7 +235,11 @@ namespace ForjaElemental.Game
                         tag = L("", "unit-tag"); tag.pickingMode = PickingMode.Ignore; world.Add(tag); bars[key] = tag;
                     }
                     var lab = (Label)tag;
-                    lab.text = $"Nv.{u.Level}{(u.EvoPoints > 0 ? " +PE" : "")}";
+                    bool foe = !u.Id.All(char.IsDigit);
+                    lab.text = foe
+                        ? $"Nv.{u.Level}{(u.IsBoss ? " · chefe" : u.IsElite ? " · elite" : "")}{(u.Raider ? " · saqueador" : "")}{(u.Ambush ? " · emboscada" : "")}"
+                        : $"Nv.{u.Level}{(u.EvoPoints > 0 ? " +PE" : "")}";
+                    lab.EnableInClassList("foe-tag", foe);
                     lab.EnableInClassList("selected", u.Id == gc.SelectedId || u.Id == gc.InspectEnemyId);
                     var p = ToPanel(top); lab.style.left = p.x - 18; lab.style.top = p.y;
                 }
@@ -250,7 +254,11 @@ namespace ForjaElemental.Game
             if (info == null) return;
             int foes = c.Units.Count(u => u.Team == "enemy" && !u.Dead && u.Structure == null);
             int mine = c.Units.Count(u => u.Team == "player" && !u.Dead && !u.IsSummon && u.Structure == null);
-            info.text = $"Tempo {c.Time:0}s   Aliados {mine}   Inimigos {foes}" + (c.WaveMax > 1 ? $"   Onda {c.WaveNow}/{c.WaveMax}" : "") + (G.Paused ? "   (pausado)" : "");
+            string extra = "";
+            if (c.WaveMax > 1) extra += $"   Onda {c.WaveNow}/{c.WaveMax}" + (c.WaveNow < c.WaveMax ? $" (próxima em {Math.Max(0, c.NextWaveT - c.Time):0}s)" : "");
+            if (c.City != null) extra += $"   Cidade {(c.City.Dead ? "caiu" : Pct(c.City.Hp / c.City.Stats.MaxHp))}";
+            if (c.Fort != null) extra += $"   Fortaleza {(c.Fort.Dead ? "caiu" : Pct(c.Fort.Hp / c.Fort.Stats.MaxHp))}" + (c.FortPool.Count > 0 && !c.Fort.Dead ? $" · {c.FortPool.Count} reforços" : "");
+            info.text = $"Tempo {c.Time:0}s   Aliados {mine}   Inimigos {foes}{extra}" + (G.Paused ? "   (pausado)" : "");
         }
 
         /* ---------------- reconstrução ---------------- */
@@ -468,7 +476,8 @@ namespace ForjaElemental.Game
             if (r.Phase != "PREP") { briefing.EnableInClassList("hidden", true); actionBar.EnableInClassList("hidden", true); return; }
             var ms = D.Missions[r.Mission ?? "batalha"]; var cd = D.Conditions[r.Cond ?? "nenhuma"];
             briefing.Add(Row(L($"{ms.Name}", "bold", "goldtext"), L(ms.Short, "dim", "gap")));
-            if (r.Cond != "nenhuma") briefing.Add(L($"Condição: {cd.Name} — {cd.Desc}", "wrap"));
+            foreach (var line in MissionLines(r)) briefing.Add(L(line, "wrap", "goldtext"));
+            if (r.Cond != "nenhuma") briefing.Add(L($"Condição: {cd.Name} — {cd.Desc}" + (r.CapPenalty > 0 ? $" Limite em campo nesta sala: {G.FieldLimit(G.Me())}." : ""), "wrap"));
             if (r.Doctrine != null) { var doc = D.Doctrines[r.Doctrine]; briefing.Add(L($"Doutrina: {doc.Name} — {doc.Desc}", "wrap")); briefing.Add(L($"Ponto fraco: {doc.Weak}", "wrap", "dim")); }
             if (r.RoomType == "chefe") briefing.Add(L($"{D.GetBoss(r.Act).Name}: {D.GetBoss(r.Act).Mechanic}", "wrap", "bad"));
             if (r.Intel != null) foreach (var ic in r.Intel.Counters) briefing.Add(L($"Inteligência: {D.Counters[ic.Id].Name} ({ic.Why}) — {D.Counters[ic.Id].Answer}", "wrap", "bad"));
@@ -484,6 +493,35 @@ namespace ForjaElemental.Game
             actionBar.Add(B("Auto-posicionar", () => G.AutoArrange()));
             string fight = G.IsCoop() ? (G.Me().Ready ? "Cancelar pronto" : "Pronto!") : "Lutar!";
             actionBar.Add(B(fight, gc.StartFight, "btn-primary", "fight-btn"));
+        }
+
+        /// <summary>Detalhes da missão para o briefing (ondas, saqueadores, fortaleza).</summary>
+        IEnumerable<string> MissionLines(Run r)
+        {
+            var foes = r.Enemies;
+            switch (r.Mission)
+            {
+                case "ondas":
+                case "defesa":
+                    {
+                        var waves = foes.GroupBy(e => Math.Max(1, e.Wave)).OrderBy(g => g.Key).Select(g => g.Count()).ToList();
+                        if (waves.Count > 1) yield return $"{waves.Count} ondas: {waves[0]} inimigos agora, depois " + string.Join(" + ", waves.Skip(1)) + ". Cada onda entra pelo norte após 15s ou quando a atual cai.";
+                        if (r.Mission == "defesa")
+                        {
+                            int raiders = foes.Count(e => e.Raider);
+                            yield return $"Proteja a cidade atrás das suas linhas: {raiders} saqueador(es) vão direto nela. Se ela cair, a sala está perdida.";
+                        }
+                        break;
+                    }
+                case "invasao":
+                    {
+                        int spawn = foes.Count(e => e.FortSpawn);
+                        yield return $"Derrube a fortaleza: ela envia {spawn} reforço(s) enquanto estiver de pé, protegida por 2 torres de arqueiros. Se ela cair, a horda foge.";
+                        break;
+                    }
+            }
+            int amb = foes.Count(e => e.Ambush);
+            if (amb > 0) yield return $"{amb} inimigo(s) vão saltar para a sua retaguarda no início.";
         }
 
         /* ----- banco e mochila ----- */
@@ -551,6 +589,7 @@ namespace ForjaElemental.Game
                 {
                     var nt = D.NodeTypes[n.Type]; string id = n.Id;
                     string extra = n.Mission != null && n.Mission != "batalha" ? D.Missions[n.Mission].Name : null;
+                    if (n.Cond != null && n.Cond != "nenhuma") extra = (extra != null ? extra + "\n" : "") + D.Conditions[n.Cond].Name;
                     var b = B(nt.Name, () => { G.ChooseNode(id); mapOverlay.AddToClassList("hidden"); gc.MarkDirty(); }, "map-node");
                     b.text = Plain(nt.Name) + (extra != null ? "\n" + Plain(extra) : "");
                     b.tooltip = Plain(nt.Desc + "\n" + nt.Reward);
@@ -671,6 +710,22 @@ namespace ForjaElemental.Game
             sb = B("", () => { startScaling = modes[(modes.IndexOf(startScaling) + 1) % modes.Count]; sb.text = ScaleText(); sb.tooltip = Plain(D.Scaling.Modes[startScaling].Desc); });
             sb.text = ScaleText(); sb.tooltip = Plain(D.Scaling.Modes[startScaling].Desc);
             startCard.Add(Row(pb, ab, sb));
+            // sala de testes: qualquer missão × condição × Ato, direto na preparação
+            startCard.Add(L("Sala de testes", "section"));
+            var missions = D.Missions.Keys.ToList(); var conds = D.Conditions.Keys.ToList(); var types = new List<string> { "combate", "elite", "chefe" };
+            Button mb = null, cb = null, actB = null, tb = null;
+            mb = B("", () => { testMission = missions[(missions.IndexOf(testMission) + 1) % missions.Count]; mb.text = "Missão: " + D.Missions[testMission].Name; });
+            mb.text = "Missão: " + D.Missions[testMission].Name;
+            cb = B("", () => { testCond = conds[(conds.IndexOf(testCond) + 1) % conds.Count]; cb.text = "Condição: " + D.Conditions[testCond].Name; });
+            cb.text = "Condição: " + D.Conditions[testCond].Name;
+            actB = B("", () => { testAct = testAct % 4 + 1; actB.text = $"Ato {Roman(testAct)}"; });
+            actB.text = $"Ato {Roman(testAct)}";
+            tb = B("", () => { testType = types[(types.IndexOf(testType) + 1) % types.Count]; tb.text = D.NodeTypes[testType].Name; });
+            tb.text = D.NodeTypes[testType].Name;
+            var test = new VisualElement(); test.AddToClassList("row-wrap");
+            test.Add(mb); test.Add(cb); test.Add(actB); test.Add(tb);
+            test.Add(B("Entrar", () => EnterTestRoom()));
+            startCard.Add(test);
             var footer = new VisualElement(); footer.AddToClassList("modal-footer");
             if (G.Run != null && G.Run.Phase != "END") footer.Add(B("Voltar ao jogo", () => OpenStart(false)));
             if (SaveSystem.HasRun && (G.Run == null)) footer.Add(B("Continuar expedição", () => { if (gc.ContinueRun()) OpenStart(false); }));
@@ -678,6 +733,18 @@ namespace ForjaElemental.Game
             startCard.Add(footer);
             startCard.Add(L($"Fragmentos astrais: {G.Meta.AstralShards} · expedições {G.Meta.Records.Runs} · vitórias {G.Meta.Records.Wins}", "dim"));
             startCard.Add(L("Botão direito: girar a câmera · roda: zoom · H: tela ampla · M: mapa · Espaço: pausa", "dim", "wrap"));
+        }
+
+        string testMission = "ondas", testCond = "nenhuma", testType = "combate";
+        int testAct = 1;
+
+        /// <summary>Entra na sala de testes (começa uma expedição se não houver uma em andamento).</summary>
+        public void EnterTestRoom(string mission = null, string cond = null, int act = 0, string type = null)
+        {
+            if (G.Run == null || G.Run.Phase == "END" || G.Run.Phase == "COMBAT") gc.NewRun(string.IsNullOrWhiteSpace(seedField?.value) ? "TESTES" : seedField.value, startAsc, startPlayers, startScaling);
+            G.EnterTestRoom(type ?? testType, mission ?? testMission, cond ?? testCond, null, act > 0 ? act : testAct);
+            gc.SelectedId = null; gc.InspectEnemyId = null;
+            OpenStart(false);
         }
 
         public void OpenStart(bool open)

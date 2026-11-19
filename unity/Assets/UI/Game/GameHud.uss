@@ -600,3 +600,7 @@ TemplateContainer {
 .unit-tag.selected {
     color: var(--gold);
 }
+
+.unit-tag.foe-tag {
+    color: rgb(252, 165, 165);
+}

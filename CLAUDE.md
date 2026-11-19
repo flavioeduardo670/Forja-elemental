@@ -28,6 +28,12 @@ render-iso, render, ui, main. Namespace global `FE`, eventos em `FE.Bus`, RNG co
 5. Tabuleiro 16×14, câmera orbital, UI (UI Toolkit) compacta com painéis recolhíveis.
 6. Missões (batalha, ondas, defender cidade, invadir base) e condições de campo.
 
+## Estado da migração
+Passos 1–6 feitos: `unity/` com Core em C# (paridade testada contra o JS via `tools/*.js` e
+`unity/Assets/Tests`), modelos do Blender (`blender/build_models.py`) e a cena jogável
+`unity/Assets/Scenes/Jogo.unity` com todas as missões e condições. Detalhes em `unity/README.md`.
+Ferramentas fora do PATH nesta máquina: git (GitHub Desktop) e, em shells antigos, `unity`/`node`.
+
 ## Versionamento
 Cada versão tem tag (`v2.0.0` … `v5.0.0`). Commits pequenos, mensagens em português.
 Nunca commitar `unity/Library`, `Temp`, `Logs`, `UserSettings`, builds ou `.blend1`.

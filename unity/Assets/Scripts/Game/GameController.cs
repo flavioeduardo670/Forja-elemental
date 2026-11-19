@@ -37,6 +37,7 @@ namespace ForjaElemental.Game
         CombatState shownCombat;
 
         readonly Dictionary<object, UnitView> views = new Dictionary<object, UnitView>();
+        readonly Dictionary<object, float> collapse = new Dictionary<object, float>();
         Transform unitsRoot;
 
         void Awake()
@@ -141,7 +142,18 @@ namespace ForjaElemental.Game
                     var pos = Board.World(u.X, u.Y, 0);
                     Vector3? face = u.Target != null && !u.Target.Dead ? Board.World(u.Target.X, u.Target.Y) : (Vector3?)null;
                     float defYaw = u.Team == "player" ? 0 : 180;
-                    if (u.Structure != null) { v.transform.position = pos; v.transform.rotation = Quaternion.Euler(0, u.Structure == "cidade" ? 180 : 0, 0); v.Seen = true; v.gameObject.SetActive(!u.Dead); continue; }
+                    if (u.Structure != null)
+                    {
+                        // estrutura destruída desaba: afunda e achata em ~1,5s
+                        float fall = 0;
+                        if (u.Dead) { collapse.TryGetValue(u, out fall); fall += dt; collapse[u] = fall; }
+                        v.transform.position = pos + Vector3.down * Mathf.Min(1.2f, fall * 0.8f);
+                        v.transform.rotation = Quaternion.Euler(fall * 6, u.Structure == "cidade" ? 180 : 0, fall * 4);
+                        v.transform.localScale = new Vector3(1, Mathf.Max(0.05f, 1 - fall * 0.6f), 1);
+                        v.Seen = true; v.gameObject.SetActive(fall < 1.6f);
+                        if (u.Dead && fall <= dt) Fx.Shock(u.X, u.Y, 3.0, "#D9483B");
+                        continue;
+                    }
                     v.Sync(pos, face, defYaw, dt, u.Stun > 0, won && u.Team == "player", (float)u.AnimAtk, (float)u.AnimCast, (float)u.Flash, u.Dead);
                     v.Seen = true;
                 }
@@ -172,7 +184,32 @@ namespace ForjaElemental.Game
                     }
                 }
             }
-            foreach (var key in views.Where(kv => !kv.Value.Seen).Select(kv => kv.Key).ToList()) { Destroy(views[key].gameObject); views.Remove(key); }
+            foreach (var key in views.Where(kv => !kv.Value.Seen).Select(kv => kv.Key).ToList()) { Destroy(views[key].gameObject); views.Remove(key); collapse.Remove(key); }
+            Board.Highlight(PlacementTiles());
+        }
+
+        static readonly Color FreeTile = new Color(0.35f, 0.95f, 0.6f, 0.28f), SwapTile = new Color(0.4f, 0.75f, 1f, 0.22f), SelTile = new Color(1f, 0.78f, 0.25f, 0.5f), NoTile = new Color(1f, 0.3f, 0.3f, 0.22f);
+
+        /// <summary>Casas onde a unidade selecionada pode ir (verde livre, azul troca, vermelho bloqueada).</summary>
+        List<(int c, int r, Color col)> PlacementTiles()
+        {
+            var r = G.Run;
+            if (r == null || ShowingCombat || !G.CanEdit() || SelectedId == null) return null;
+            var u = G.Find(SelectedId);
+            if (u == null || !G.IsMine(u)) return null;
+            bool onBoard = G.OnBoard(u.Id);
+            bool canAdd = onBoard || G.BoardOf(u.Owner).Count < G.FieldLimit(G.P(u.Owner));
+            var list = new List<(int, int, Color)>();
+            for (int row = Data.Config.PlayerRow; row < Data.Config.ROWS; row++)
+                for (int c = 0; c < Data.Config.COLS; c++)
+                {
+                    if (onBoard && (int)u.Col == c && (int)u.Row == row) { list.Add((c, row, SelTile)); continue; }
+                    if (G.NoPlace(c, row)) { list.Add((c, row, NoTile)); continue; }
+                    var occ = r.Board.FirstOrDefault(x => (int)x.Col == c && (int)x.Row == row);
+                    if (occ != null) { if (occ.Owner == u.Owner) list.Add((c, row, SwapTile)); continue; }
+                    if (canAdd) list.Add((c, row, FreeTile));
+                }
+            return list;
         }
 
         static float Scale(bool boss, bool elite, bool summon, bool structure) =>

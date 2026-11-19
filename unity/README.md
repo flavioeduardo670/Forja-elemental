@@ -33,6 +33,19 @@ giram/inclinam; **H** tela ampla; **M** mapa; **Espaço** pausa; **Esc** limpa a
 
 ![Preparação](../docs/unity-preparacao.png)
 ![Combate](../docs/unity-combate.png)
+
+### Missões e condições de campo
+As quatro missões (Batalha Campal, Reforços Inimigos, Defender a Cidade, Invadir a Base) e as condições
+(Dois Andares, Alçapões, Chão Desabado, Desfiladeiro Estreito) vêm do Core e batem com o JS. Na cena:
+o briefing mostra ondas, saqueadores, reforços da fortaleza e o limite de campo da sala; no combate a
+linha de status mostra a onda (e quando entra a próxima) e a vida da cidade/fortaleza; estruturas
+destruídas desabam; ao selecionar uma unidade, as casas válidas ficam verdes (azul = troca, vermelho = bloqueada).
+
+**Sala de testes** (tela inicial / Menu): escolha missão, condição, Ato e tipo de sala e entre direto na
+preparação — `Expedition.EnterTestRoom` no Core.
+
+![Defender a Cidade](../docs/unity-missao-defesa.png)
+![Invadir a Base](../docs/unity-missao-invasao.png)
 - `Assets/Resources/Data/forja-data.json` — conteúdo exportado de `js/data.js`.
 - `Assets/Tests/EditMode/` — testes de paridade com o motor JS (`Golden/*.json`).
 
@@ -44,7 +57,7 @@ node tools/export-data.js      # atualiza forja-data.json
 node tools/make-golden.js      # regrava os valores de referência do motor
 node tools/sim-trace.js        # regrava expedições passo a passo e resumos do sim.js
 unity test unity --mode EditMode
-unity test unity --mode PlayMode   # abre a cena, joga uma sala com a IA e grava capturas em Logs/Shots
+unity test unity --mode PlayMode   # abre a cena, joga uma sala e cada missão com a IA; capturas em Logs/Shots
 ```
 
 Os testes comparam RNG, atributos, mapa, terreno, hordas, combates completos, expedições inteiras

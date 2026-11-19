@@ -701,33 +701,7 @@ namespace ForjaElemental.Core
             Log($"🗺️ Sala {r.Room}/{C.TotalRooms}: {nt.Icon} {nt.Name}{(IsCoop() ? $" (caminho escolhido por {Leader().Name})" : "")}.");
             if (!r.RoomTypesSeen.Contains(node.Type)) r.RoomTypesSeen.Add(node.Type);
             if (node.Type == "combate" || node.Type == "elite" || node.Type == "chefe")
-            {
-                r.RoomType = node.Type; r.Affix = node.Affix; r.Attempt = 0;
-                r.Layout = node.Layout ?? "planicie";
-                r.Mission = node.Mission ?? "batalha"; r.Cond = node.Cond ?? "nenhuma";
-                int capN = D.Conditions.TryGetValue(r.Cond, out var cd0) ? cd0.Cap : 0;
-                r.CapPenalty = IsCoop() ? (int)Math.Floor(capN / (double)Coop() + 0.25) : capN;
-                r.Terrain = WithRng(rng => Generation.GenerateTerrain(D, rng, r.Layout, r.Act, r.Cond, r.Mission));
-                RelocateBlocked();
-                EnforceFieldLimit();
-                r.Doctrine = node.Type == "chefe" ? null : PickDoctrine();
-                double extra = r.Mission == "ondas" ? 1.3 : r.Mission == "defesa" ? 1.35 : r.Mission == "invasao" ? 1.2 : 1;
-                r.Enemies = WithRng(rng => Generation.GenerateHorde(D, rng, r.Room, r.Act, node.Type, r.Ascension, r.Terrain, Coop(), r.Doctrine, extra));
-                WithRng(rng => AssignScenario(rng));
-                if (r.Flags.Galinha) foreach (var e in r.Enemies) { e.Symbol = e.IsBoss ? "🐓" : "🐔"; e.Name = e.IsBoss ? "Galo " + e.Name : "Galinha " + e.Name.Split(' ')[0]; }
-                ApplyScaling(node.Type);
-                ApplyIntel();
-                r.Objective = PickObjective(node.Type);
-                var lay = D.Layouts[r.Layout];
-                Log($"🗺️ Terreno: {lay.Icon} {lay.Name} — {lay.Desc}");
-                var ms = D.Missions[r.Mission]; var cd = D.Conditions[r.Cond];
-                Log($"{ms.Icon} Missão: {ms.Name} — {ms.Desc}", r.Mission == "batalha" ? "" : "level");
-                if (r.Cond != "nenhuma") Log($"{cd.Icon} Condição: {cd.Name} — {cd.Desc}", "level");
-                r.Phase = "PREP";
-                if (node.Type == "chefe") { Sfx("bossGong"); var b = D.GetBoss(r.Act); Log($"👑 {b.Name}: {b.Mechanic}", "danger"); }
-                Ach("state"); Changed();
-                if (TotalEvo() > 0) OnOpenEvo?.Invoke();
-            }
+                SetupFight(node.Type, node.Affix, node.Layout, node.Mission, node.Cond);
             else
             {
                 r.Affix = "padrao"; r.Enemies = new List<UnitDef>(); r.Structures = new List<StructureSpec>(); r.CapPenalty = 0; r.Mission = null; r.Cond = null;
@@ -739,6 +713,57 @@ namespace ForjaElemental.Core
                 r.AfterPending = "MAP"; r.Phase = "CHOICE";
                 Ach("state"); Changed();
             }
+        }
+
+        /// <summary>Monta uma sala de combate: terreno, doutrina, horda, cenário da missão, escala, inteligência e objetivo.</summary>
+        void SetupFight(string type, string affix, string layout, string mission, string cond)
+        {
+            var r = Run;
+            r.RoomType = type; r.Affix = affix; r.Attempt = 0;
+            r.Layout = layout ?? "planicie";
+            r.Mission = mission ?? "batalha"; r.Cond = cond ?? "nenhuma";
+            int capN = D.Conditions.TryGetValue(r.Cond, out var cd0) ? cd0.Cap : 0;
+            r.CapPenalty = IsCoop() ? (int)Math.Floor(capN / (double)Coop() + 0.25) : capN;
+            r.Terrain = WithRng(rng => Generation.GenerateTerrain(D, rng, r.Layout, r.Act, r.Cond, r.Mission));
+            RelocateBlocked();
+            EnforceFieldLimit();
+            r.Doctrine = type == "chefe" ? null : PickDoctrine();
+            double extra = r.Mission == "ondas" ? 1.3 : r.Mission == "defesa" ? 1.35 : r.Mission == "invasao" ? 1.2 : 1;
+            r.Enemies = WithRng(rng => Generation.GenerateHorde(D, rng, r.Room, r.Act, type, r.Ascension, r.Terrain, Coop(), r.Doctrine, extra));
+            WithRng(rng => AssignScenario(rng));
+            if (r.Flags.Galinha) foreach (var e in r.Enemies) { e.Symbol = e.IsBoss ? "🐓" : "🐔"; e.Name = e.IsBoss ? "Galo " + e.Name : "Galinha " + e.Name.Split(' ')[0]; }
+            ApplyScaling(type);
+            ApplyIntel();
+            r.Objective = PickObjective(type);
+            var lay = D.Layouts[r.Layout];
+            Log($"🗺️ Terreno: {lay.Icon} {lay.Name} — {lay.Desc}");
+            var ms = D.Missions[r.Mission]; var cd = D.Conditions[r.Cond];
+            Log($"{ms.Icon} Missão: {ms.Name} — {ms.Desc}", r.Mission == "batalha" ? "" : "level");
+            if (r.Cond != "nenhuma") Log($"{cd.Icon} Condição: {cd.Name} — {cd.Desc}", "level");
+            r.Phase = "PREP";
+            if (type == "chefe") { Sfx("bossGong"); var b = D.GetBoss(r.Act); Log($"👑 {b.Name}: {b.Mechanic}", "danger"); }
+            Ach("state"); Changed();
+            if (TotalEvo() > 0) OnOpenEvo?.Invoke();
+        }
+
+        /// <summary>
+        /// Sala de testes: monta um combate com missão, condição, terreno e Ato escolhidos,
+        /// sem passar pelo mapa. Serve para conferir cada missão; não existe no JS.
+        /// </summary>
+        public void EnterTestRoom(string type = "combate", string mission = "batalha", string cond = "nenhuma", string layout = null, int act = 1, int? room = null)
+        {
+            var r = Run;
+            if (r == null || r.Phase == "COMBAT") return;
+            r.Pending.Clear();
+            act = Math.Max(1, Math.Min(4, act));
+            if (act != r.Act) { r.Act = act; r.Map = WithRng(rng => Generation.GenerateActMap(D, rng, act, r.Ascension)); }
+            r.NodeId = null;
+            r.Room = room ?? (act - 1) * C.RoomsPerAct + (type == "chefe" ? C.RoomsPerAct : 3);
+            if (layout == null || !D.Layouts.TryGetValue(layout, out var lay) || !lay.Acts.Contains(act))
+                layout = D.Layouts.First(kv => kv.Value.Acts.Contains(act)).Key;
+            foreach (var p in r.Players) { p.Ready = false; RefreshOffers(p.Id, true); }
+            Log($"🧪 Sala de testes: {D.Missions[mission].Name}, {D.Conditions[cond].Name}, {D.Layouts[layout].Name} (Ato {act}).", "level");
+            SetupFight(type, "padrao", layout, mission, cond);
         }
 
         /* ---------------- Prontos e combate ---------------- */

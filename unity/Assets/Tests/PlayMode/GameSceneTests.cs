@@ -39,6 +39,68 @@ namespace ForjaElemental.Tests
 
         static IEnumerator Frames(int n) { for (int i = 0; i < n; i++) yield return null; }
 
+        static readonly object[] Missoes =
+        {
+            new object[] { "batalha", "andares", 1, 'U' },
+            new object[] { "ondas", "alcapoes", 1, 'T' },
+            new object[] { "defesa", "buracos", 2, 'O' },
+            new object[] { "invasao", "estreito", 3, 'M' }
+        };
+
+        [UnityTest]
+        public IEnumerator Missao_FuncionaNaCena([ValueSource(nameof(Missoes))] object[] caso)
+        {
+            string mission = (string)caso[0], cond = (string)caso[1]; int act = (int)caso[2]; char tile = (char)caso[3];
+            SceneManager.LoadScene("Jogo");
+            yield return Frames(3);
+            var gc = UnityEngine.Object.FindAnyObjectByType<GameController>();
+            var doc = gc.uiDocument;
+            var uiRt = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32);
+            doc.panelSettings.targetTexture = uiRt; doc.panelSettings.clearColor = true; doc.panelSettings.colorClearValue = new Color(0, 0, 0, 0);
+            var camRt = new RenderTexture(1600, 900, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
+            gc.cam.targetTexture = camRt;
+            yield return Frames(2);
+
+            gc.Hud.EnterTestRoom(mission, cond, act, "combate");
+            var r = gc.G.Run;
+            Assert.AreEqual("PREP", r.Phase);
+            Assert.AreEqual(mission, r.Mission); Assert.AreEqual(cond, r.Cond);
+            Assert.IsTrue(r.Terrain.Contains(tile), $"condição {cond} marca o terreno com '{tile}'");
+            if (mission == "defesa") Assert.IsTrue(r.Structures.Any(s => s.Structure == "cidade"), "cidade a defender");
+            if (mission == "invasao") { Assert.AreEqual(1, r.Structures.Count(s => s.Structure == "forte")); Assert.AreEqual(2, r.Structures.Count(s => s.Structure == "torre")); Assert.IsTrue(r.Enemies.Any(e => e.FortSpawn)); }
+            if (mission == "ondas" || mission == "defesa") Assert.IsTrue(r.Enemies.Any(e => e.Wave > 1), "inimigos em ondas");
+            if (cond == "buracos" || cond == "estreito") Assert.Greater(r.CapPenalty, 0, "condição reduz o limite em campo");
+
+            gc.Ai.Prep();
+            gc.SelectedId = r.Board.First().Id;
+            gc.MarkDirty();
+            yield return Frames(4);
+            Shot(gc, uiRt, $"m_{mission}_1_preparacao");
+            gc.SelectedId = null;
+
+            gc.Speed = 2;
+            gc.StartFight();
+            Assert.AreEqual("COMBAT", r.Phase);
+            var c = gc.G.Combat;
+            if (mission == "defesa") Assert.IsNotNull(c.City);
+            if (mission == "invasao") Assert.IsNotNull(c.Fort);
+            float t = 0;
+            while (r.Phase == "COMBAT" && c.Time < 9 && t < 60) { t += Time.deltaTime; yield return null; }
+            gc.MarkDirty(); yield return Frames(2);
+            Shot(gc, uiRt, $"m_{mission}_2_combate");
+            gc.Speed = 4;
+            t = 0;
+            while (r.Phase == "COMBAT" && t < 120) { t += Time.deltaTime; yield return null; }
+            Assert.AreNotEqual("COMBAT", r.Phase, "o combate terminou");
+            Assert.IsNotNull(c.Result);
+            if (mission == "ondas" && c.Result.Won) Assert.Greater(c.WaveNow, 1, "as ondas entraram");
+            if (mission == "invasao" && c.Result.Won) Assert.IsTrue(c.Result.FortDown || c.Units.All(u => u.Team != "enemy" || u.Dead || u.Structure != null));
+            Debug.Log($"[teste] {mission}/{cond}: {(c.Result.Won ? "vitória" : "derrota")} em {c.Result.Time:0}s, ondas {c.WaveNow}/{c.WaveMax}, cidade caiu={c.Result.CityLost}, forte caiu={c.Result.FortDown}");
+
+            doc.panelSettings.targetTexture = null; gc.cam.targetTexture = null;
+            uiRt.Release(); camRt.Release();
+        }
+
         [UnityTest]
         public IEnumerator Cena_JogaUmaSalaComAIA()
         {
