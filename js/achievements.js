@@ -23,6 +23,11 @@
   ];
 
   const LIST = [
+    // v3.0 — Camada estratégica
+    { id: 'contratante', cat: 'estrategia', icon: '🎖️', name: 'Olho de Recrutador', reward: 15, desc: 'Contrate um Herói no Quartel.', on: ['hire'], test: ev => ev.quality === 2 },
+    { id: 'objetivo1', cat: 'estrategia', icon: '🎯', name: 'Missão Cumprida', reward: 10, desc: 'Cumpra um objetivo bônus.', on: ['objective'], test: ev => ev.total >= 1 },
+    { id: 'objetivo10', cat: 'estrategia', icon: '🏅', name: 'Oficial Exemplar', reward: 30, desc: 'Cumpra 10 objetivos bônus numa mesma expedição.', on: ['objective'], test: ev => ev.total >= 10 },
+    { id: 'contra_intel', cat: 'estrategia', icon: '🧠', name: 'Um Passo à Frente', reward: 25, desc: 'Vença uma luta em que o inimigo preparou 2 contramedidas.', on: ['combat'], test: (ev, r) => ev.won && r && r.intel && r.intel.counters.length >= 2 },
     // Campanha
     { id: 'primeiro_sangue', cat: 'campanha', icon: '🗡️', name: 'Primeiro Sangue', reward: 10, desc: 'Vença seu primeiro combate.', on: ['combat'], test: ev => ev.won },
     { id: 'colosso', cat: 'campanha', icon: '🗿', name: 'Quebra-Pedras', reward: 20, desc: 'Derrote o Colosso de Obsidiana (Ato I).', on: ['combat'], test: ev => ev.won && ev.roomType === 'chefe' && ev.act === 1 },

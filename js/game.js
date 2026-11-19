@@ -119,7 +119,7 @@
         id: i, name: (names[i] && String(names[i]).trim().slice(0, 14)) || (n > 1 ? `Jogador ${i + 1}` : 'Comandante'),
         color: PLAYER_COLORS[i], gold: Math.round((C.START_GOLD + up.goldStart * 15) * gf) - (asc >= 2 ? 30 : 0),
         bench: Array(C.BENCH).fill(null), bag: [], teamLimit: n > 1 ? Math.min(cap, 3) : C.START_TEAM_LIMIT, ready: false,
-        recruited: 0, kills: 0, dmg: 0, heal: 0
+        recruited: 0, kills: 0, dmg: 0, heal: 0, offers: [], rerolls: 0
       })),
       active: 0, turn: 0,
       board: [], relics: [],
@@ -127,8 +127,10 @@
       phase: 'MAP', pending: [], afterPending: 'MAP', ended: null,
       terrain: '.'.repeat(C.COLS * C.ROWS), layout: 'planicie', roomTypesSeen: [], noLoss: true,
       flags: { galinha: seedStr === 'GALINHA', eggWins: 0 },
-      scaling: D.SCALING.modes[scaling] ? scaling : 'dinamica', threat: 0, scale: null
+      scaling: D.SCALING.modes[scaling] ? scaling : 'dinamica', threat: 0, scale: null,
+      tactic: 'equilibrio', doctrine: null, intel: null, objective: null, lastDoctrine: null
     };
+    G.run.players.forEach(p => G.refreshOffers(p.id, true));
     G.run.map = withRng(r => E.generateActMap(r, 1, asc));
     G.meta.records.runs++; if (n > 1) G.meta.records.coopRuns++;
     G.saveMeta();
@@ -154,7 +156,9 @@
     if (!s || s.v !== 4) return false;
     if (s.phase === 'COMBAT') s.phase = 'PREP';
     s.players.forEach(p => { p.ready = false; });
-    G.run = s; G.combat = null; G.paused = false;
+    G.run = s;
+    if (!s.tactic) s.tactic = 'equilibrio';
+    s.players.forEach(p => { if (!p.offers || !p.offers.length) { p.offers = []; p.rerolls = 0; G.refreshOffers(p.id, true); } }); G.combat = null; G.paused = false;
     log(`📂 Expedição retomada — Ato ${s.act}, Sala ${s.room}/${C.TOTAL_ROOMS}.`, 'gold');
     changed();
     return true;
@@ -184,8 +188,8 @@
     for (const u of G.run.board) for (const o of G.arch(u).orders) counts[o]++;
     return counts;
   };
-  G.statsCtx = (pid) => ({ isEnemy: false, board: G.run.board, relics: new Set(G.run.relics), affix: G.run.affix,
-    gold: pid === undefined ? Math.round(G.totalGold() / G.coop()) : G.P(pid).gold, synergy: G.synergyCounts(), orders: G.orderCounts() });
+  G.statsCtx = (pid, neutral) => ({ isEnemy: false, board: G.run.board, relics: new Set(G.run.relics), affix: G.run.affix,
+    gold: pid === undefined ? Math.round(G.totalGold() / G.coop()) : G.P(pid).gold, synergy: G.synergyCounts(), orders: G.orderCounts(), tactic: neutral ? null : G.run.tactic });
   G.statsOf = (u, ctx) => E.computeStats(u, ctx || G.statsCtx(u.owner || 0));
   G.enemyStats = (e) => E.computeStats(e, { isEnemy: true, affix: G.run.affix, ascension: G.run.ascension });
 
@@ -229,24 +233,111 @@
     return true;
   }
 
-  G.buy = function (archId) {
-    const r = G.run, p = G.me();
+  /* ---------------- QUARTEL (recrutamento) ----------------
+     Cada jogador vê 5 recrutas por sala, com qualidade (Recruta/Veterano/Herói)
+     e traços. Pode rolar de novo (ouro), travar cartas para a próxima sala ou
+     contratar qualquer arquétipo direto por um preço maior (Contrato). */
+  const QT = D.QUARTEL;
+  G.contractCost = (archId) => Math.round(G.recruitCost(archId) * QT.contractMult);
+  G.rerollCost = (pid = G.run.active) => QT.rerollBase + QT.rerollStep * (G.P(pid).rerolls || 0);
+  function rollOffer(rng, pid, want) {
+    const r = G.run, act = Math.max(1, r.act), odds = QT.odds[Math.min(3, act - 1)];
+    let x = rng.next(), qi = 0;
+    while (qi < odds.length - 1 && x > odds[qi]) { x -= odds[qi]; qi++; }
+    if (r.room <= 1 && qi > 1) qi = 1;
+    const q = QT.quality[qi];
+    const archs = Object.values(D.ARCHETYPES);
+    let pool = archs;
+    if (want === 'front') pool = archs.filter(a => a.pref === 'front' || a.pref === 'mid');
+    else if (want === 'back') pool = archs.filter(a => a.pref === 'back');
+    else if (rng.chance(QT.synergyBias)) {
+      const mineOrders = new Set(G.unitsOf(pid).flatMap(u => D.ARCHETYPES[u.archetypeId].orders));
+      const fit = archs.filter(a => a.orders.some(o => mineOrders.has(o)));
+      if (fit.length) pool = fit;
+    }
+    const arch = rng.pick(pool);
+    let trait = null, el = null;
+    if (rng.chance(q.traitChance)) {
+      const ts = Object.values(D.TRAITS).filter(t => q.rareTrait ? t.rare : (t.rare ? rng.chance(0.25) : true));
+      trait = rng.pick(ts.length ? ts : Object.values(D.TRAITS)).id;
+      if (trait === 'afinidade') el = rng.pick(Object.keys(D.ELEMENTS));
+    }
+    const tm = trait && D.TRAITS[trait].costMult ? D.TRAITS[trait].costMult : 1;
+    return { arch: arch.id, quality: qi, trait, el, cost: Math.max(10, Math.round(G.recruitCost(arch.id) * q.costMult * tm)), locked: false };
+  }
+  G.refreshOffers = function (pid, newRoom) {
+    const p = G.P(pid);
+    if (!p.offers) p.offers = [];
+    if (newRoom) p.rerolls = 0;
+    withRng(rng => {
+      const keep = p.offers.filter(o => o && o.locked);
+      const fresh = [];
+      const slots = QT.slots - keep.length;
+      for (let i = 0; i < slots; i++) fresh.push(rollOffer(rng, pid, i === 0 ? 'front' : i === 1 ? 'back' : null));
+      p.offers = [...keep, ...rng.shuffle(fresh)].slice(0, QT.slots);
+    });
+  };
+  G.reroll = function () {
+    const p = G.me();
     if (!G.canEdit()) return toast('Aguarde o fim do combate.', 'error');
-    const arch = D.ARCHETYPES[archId], cost = G.recruitCost(archId);
-    if (p.gold < cost) return toast(`Ouro insuficiente: ${arch.name} custa ${cost}g.`, 'error');
+    const cost = G.rerollCost(p.id);
+    if (p.gold < cost) return toast(`Rolar o Quartel custa ${cost}g.`, 'error');
+    p.gold -= cost; p.rerolls = (p.rerolls || 0) + 1;
+    G.refreshOffers(p.id, false);
+    sfx('click'); G.save(); changed();
+  };
+  G.toggleLock = function (i) {
+    const o = G.me().offers[i]; if (!o) return;
+    o.locked = !o.locked; sfx('click'); G.save(); changed();
+  };
+  function addUnit(p, archId, cost, extra = {}) {
+    const r = G.run, arch = D.ARCHETYPES[archId];
     const tile = G.boardOf(p.id).length < p.teamLimit ? freeBoardTile() : null;
     const slot = freeBench(p);
-    if (!tile && slot === -1) return toast('Campo e Banco cheios. Aumente o limite ou venda uma unidade.', 'error');
+    if (!tile && slot === -1) { toast('Campo e Banco cheios. Aumente o limite ou venda uma unidade.', 'error'); return null; }
+    if (p.gold < cost) { toast(`Ouro insuficiente: custa ${cost}g.`, 'error'); return null; }
     p.gold -= cost; p.recruited++;
     const id = r.nextUnitId++;
-    const u = { id, owner: p.id, archetypeId: archId, name: `${arch.name} #${id}`, cost, level: 1, xp: 0,
-      evoPoints: p.recruited <= G.meta.upgrades.mentor ? 1 : 0,
-      col: tile ? tile.col : -1, row: tile ? tile.row : -1, elements: {}, skills: { [arch.signatureSkill]: 1 }, items: [] };
+    const lvl = extra.level || 1;
+    const t = extra.trait ? D.TRAITS[extra.trait] : null;
+    const u = { id, owner: p.id, archetypeId: archId, name: `${arch.name} #${id}`, cost, level: lvl, xp: 0,
+      evoPoints: (p.recruited <= G.meta.upgrades.mentor ? 1 : 0) + (lvl - 1) + (t && t.pe ? t.pe : 0),
+      col: tile ? tile.col : -1, row: tile ? tile.row : -1, elements: extra.el ? { [extra.el]: 1 } : {}, skills: { [arch.signatureSkill]: 1 }, items: [],
+      trait: extra.trait || null, quality: extra.quality || 0 };
     if (tile) r.board.push(u); else p.bench[slot] = u;
-    log(`${G.isCoop() ? p.name + ' recrutou' : 'Recrutou'} ${u.name} ${tile ? 'no campo' : 'no banco'} (${cost}g).`, 'gold');
     const rec = G.meta.lifetime.recruited;
     if (!rec.includes(archId)) { rec.push(archId); G.saveMeta(); }
-    unready(p.id); G.selectedId = id; sfx('buy'); G.save(); changed();
+    unready(p.id); G.selectedId = id; sfx('buy');
+    G.emitAch({ type: 'hire', quality: u.quality, trait: u.trait });
+    return { u, tile };
+  }
+  G.hire = function (i) {
+    const p = G.me();
+    if (!G.canEdit()) return toast('Aguarde o fim do combate.', 'error');
+    const o = p.offers[i]; if (!o) return;
+    const res = addUnit(p, o.arch, o.cost, { level: QT.quality[o.quality].level, trait: o.trait, el: o.el, quality: o.quality });
+    if (!res) return;
+    p.offers[i] = null;
+    const q = QT.quality[o.quality];
+    log(`${G.isCoop() ? p.name + ' contratou' : 'Contratou'} ${q.name} ${res.u.name}${o.trait ? ` (${D.TRAITS[o.trait].icon} ${D.TRAITS[o.trait].name})` : ''} ${res.tile ? 'no campo' : 'no banco'} (${o.cost}g).`, 'gold');
+    G.save(); changed();
+  };
+  /* Contrato direto: qualquer arquétipo, sem traço, preço ×1,5 */
+  G.buy = function (archId) {
+    const p = G.me();
+    if (!G.canEdit()) return toast('Aguarde o fim do combate.', 'error');
+    const cost = G.contractCost(archId);
+    const res = addUnit(p, archId, cost);
+    if (!res) return;
+    log(`📜 ${G.isCoop() ? p.name + ' firmou' : 'Firmou'} contrato com ${res.u.name} ${res.tile ? 'no campo' : 'no banco'} (${cost}g).`, 'gold');
+    G.save(); changed();
+  };
+
+  G.setTactic = function (t) {
+    if (!G.canEdit() || !D.TACTICS[t]) return;
+    G.run.tactic = t; sfx('click');
+    log(`${D.TACTICS[t].icon} Tática: ${D.TACTICS[t].name}.`);
+    G.save(); changed();
   };
 
   G.sell = function (id) {
@@ -424,6 +515,7 @@
   G.grantXp = function (u, amount) {
     let mult = 1;
     if (G.hasRelic('coroa_lobo') && G.run.board.length <= 3) mult += 0.35;
+    if (u.trait && D.TRAITS[u.trait] && D.TRAITS[u.trait].xp) mult += D.TRAITS[u.trait].xp;
     for (const it of u.items) if (D.ITEMS[it.id].stats.xpMult) mult += D.ITEMS[it.id].stats.xpMult * C.ITEM_TIER_MULT[it.tier - 1];
     u.xp += Math.round(amount * mult);
     let gained = 0;
@@ -462,7 +554,7 @@
     const node = G.availableNodes().find(n => n.id === id);
     if (!node) return;
     r.nodeId = id; r.visited.push(id); r.room = node.room; r.act = node.act;
-    r.players.forEach(p => { p.ready = false; });
+    r.players.forEach(p => { p.ready = false; G.refreshOffers(p.id, true); });
     const nt = D.NODE_TYPES[node.type];
     log(`🗺️ Sala ${r.room}/${C.TOTAL_ROOMS}: ${nt.icon} ${nt.name}${G.isCoop() ? ` (caminho escolhido por ${G.leader().name})` : ''}.`);
     if (!r.roomTypesSeen.includes(node.type)) r.roomTypesSeen.push(node.type);
@@ -471,9 +563,12 @@
       r.layout = node.layout || 'planicie';
       r.terrain = withRng(rng => E.generateTerrain(rng, r.layout, r.act));
       relocateBlocked();
-      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain, G.coop()));
+      r.doctrine = node.type === 'chefe' ? null : pickDoctrine();
+      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain, G.coop(), r.doctrine));
       if (r.flags.galinha) r.enemies.forEach(e => { e.symbol = e.isBoss ? '🐓' : '🐔'; if (!e.isBoss) e.name = 'Galinha ' + e.name.split(' ')[0]; });
       applyScaling(node.type);
+      applyIntel();
+      r.objective = pickObjective(node.type);
       log(`🗺️ Terreno: ${D.LAYOUTS[r.layout].icon} ${D.LAYOUTS[r.layout].name} — ${D.LAYOUTS[r.layout].desc}`);
       r.phase = 'PREP';
       if (node.type === 'chefe') { sfx('bossGong'); log(`👑 ${D.BOSSES[r.act].name}: ${D.BOSSES[r.act].mechanic}`, 'danger'); }
@@ -518,8 +613,10 @@
       seed: (FE.util.hashStr(r.seed) ^ (r.room * 7919) ^ (r.attempt * 104729)) >>> 0,
       relics: new Set(r.relics), affix: r.affix, fx: G.settings ? G.settings.fx !== false : true, terrain: r.terrain,
       players: r.board.map(u => ({ unit: { ...u }, stats: G.statsOf(u, ctxs[u.owner || 0]) })),
-      enemies: r.enemies.map(e => ({ unit: e, stats: G.enemyStats(e) }))
+      enemies: r.enemies.map(e => ({ unit: e, stats: G.enemyStats(e) })),
+      tactic: r.tactic, antiHeal: r.intel ? r.intel.antiHeal : 0, huntId: r.intel ? r.intel.huntId : null
     });
+    G.combat.startBoard = r.board.length; G.combat.startSyn = G.activeSynergies();
     r.phase = 'COMBAT'; r.stats.combats++; G.paused = false;
     r.players.forEach(p => { p.ready = false; });
     log(`⚔️ Combate na Sala ${r.room}/${C.TOTAL_ROOMS}${r.attempt ? ` (tentativa ${r.attempt + 1})` : ''}.`, 'gold');
@@ -541,7 +638,7 @@
   G.rosterPower = function () {
     const all = [];
     for (const p of G.run.players) {
-      const ctx = G.statsCtx(p.id);
+      const ctx = G.statsCtx(p.id, true);
       all.push(...G.unitsOf(p.id).map(u => E.unitPower(G.statsOf(u, ctx))).sort((a, b) => b - a).slice(0, p.teamLimit));
     }
     const sum = all.reduce((a, b) => a + b, 0);
@@ -552,8 +649,9 @@
   G.targetRatio = function (type) {
     const r = G.run;
     const t = (SC.targets[type] || SC.targets.combate)[Math.min(3, r.act - 1)];
-    return t * (1 + SC.ascPer * r.ascension) * (r.players.length > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (1 + (3 - r.players.length) * 0.14) : 1) * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
+    return t * (1 + SC.ascPer * r.ascension) * G.coopFactor() * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
   };
+  G.coopFactor = () => { const r = G.run, n = r.players.length; return n > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (n === 2 ? 0.85 : n === 4 ? 0.95 : 1) : 1; };
   G.setScaling = function (mode) {
     if (!G.run || !SC.modes[mode]) return;
     G.run.scaling = mode;
@@ -562,7 +660,10 @@
   };
   function applyScaling(type) {
     const r = G.run, mode = r.scaling || 'classica';
-    const pp = G.rosterPower(), ep0 = G.enemyPower();
+    const pp = G.rosterPower();
+    const savedC = r.enemies.map(e => e.cmods); r.enemies.forEach(e => { e.cmods = null; });
+    const ep0 = G.enemyPower();
+    r.enemies.forEach((e, i) => { e.cmods = savedC[i] || null; });
     const info = { mode, pp, ep0, k: 1, target: null };
     if (mode === 'nivelada') {
       const units = G.allUnits().slice().sort((a, b) => b.level - a.level).slice(0, Math.max(1, r.players.reduce((s, p) => s + p.teamLimit, 0)));
@@ -577,7 +678,9 @@
         }
       });
     } else if (mode === 'proporcional' || mode === 'dinamica') {
-      const target = G.targetRatio(type);
+      const dt = r.doctrine && D.DOCTRINES[r.doctrine] ? D.DOCTRINES[r.doctrine].tune || 1 : 1;
+      const coopTune = r.players.length > 1 && r.doctrine && r.doctrine !== 'bando' ? 0.72 * (1 + (dt - 1) * 0.35) * (D.DOCTRINES[r.doctrine].coopTune || 1) : dt;
+      const target = G.targetRatio(type) * coopTune;
       const k = Math.max(SC.kMin, Math.min(SC.kMax, Math.sqrt(target * pp / Math.max(1, ep0))));
       for (const e of r.enemies) {
         const b = e.baseStats;
@@ -593,6 +696,123 @@
     info.ratio = info.ep / Math.max(1, pp);
     r.scale = info;
   }
+  /* ---------------- DOUTRINAS, INTELIGÊNCIA E OBJETIVOS ---------------- */
+  function pickDoctrine() {
+    const r = G.run;
+    if (r.room <= 1 || root.__noDoc) return 'bando';
+    const ok = Object.values(D.DOCTRINES).filter(d => d.id !== 'bando' && d.minRoom <= r.room && d.id !== r.lastDoctrine);
+    const id = withRng(rng => rng.chance(0.12) ? 'bando' : rng.pick(ok).id);
+    r.lastDoctrine = id;
+    return id;
+  }
+  /* Perfil do exército: o que a horda "enxerga" ao preparar contramedidas */
+  G.armyProfile = function () {
+    const r = G.run;
+    const units = [];
+    for (const p of r.players) {
+      const ctx = G.statsCtx(p.id, true);
+      units.push(...G.unitsOf(p.id).map(u => ({ u, s: G.statsOf(u, ctx) })).map(x => ({ ...x, pw: E.unitPower(x.s) })).sort((a, b) => b.pw - a.pw).slice(0, p.teamLimit));
+    }
+    if (!units.length) return null;
+    let phys = 0, mag = 0, ranged = 0, healers = 0, armor = 0, pw = 0;
+    for (const { u, s, pw: w } of units) {
+      const a = s.ad * s.attackSpeed, m = s.ap * 0.9;
+      phys += a / (a + m) * w; mag += m / (a + m) * w; pw += w;
+      if (s.range >= 3) ranged++;
+      if (['clerigo', 'druida', 'bardo'].includes(u.archetypeId) || (u.archetypeId === 'paladino' && u.skills.pa_consagrar)) healers++;
+      armor += s.armor;
+    }
+    const top = units[0];
+    return { n: units.length, phys: phys / pw, mag: mag / pw, ranged: ranged / units.length, healers, armor: armor / units.length,
+      carry: units.length >= 3 ? top.pw / pw : 0, carryId: top.u.id, carryName: top.u.name };
+  };
+  function applyIntel() {
+    const r = G.run;
+    r.intel = null;
+    if (root.__noIntel) return;
+    const coop = r.players.length > 1;
+    const nCounters = r.act <= 1 ? 0 : coop ? 1 : r.act === 2 ? 1 : r.act === 3 ? 1 + (r.ascension >= 2 ? 1 : 0) : 2;
+    const prof = G.armyProfile();
+    if (!nCounters || !prof) return;
+    const cand = [];
+    if (prof.phys >= 0.62) cand.push({ id: 'placas', score: (prof.phys - 0.62) * 3 + 0.3, v: prof.phys });
+    if (prof.mag >= 0.55) cand.push({ id: 'runas', score: (prof.mag - 0.55) * 3 + 0.3, v: prof.mag });
+    if (prof.carry >= 0.38) cand.push({ id: 'cacada', score: (prof.carry - 0.38) * 4 + 0.35, v: prof.carry, n: prof.carryName });
+    if (prof.ranged >= 0.5 && prof.n >= 3) cand.push({ id: 'batedores', score: (prof.ranged - 0.5) * 2 + 0.25, v: prof.ranged });
+    if (prof.healers >= 2) cand.push({ id: 'veneno', score: 0.2 + prof.healers * 0.12, v: prof.healers });
+    if (prof.n >= 8 && !coop) cand.push({ id: 'barragem', score: 0.2 + (prof.n - 8) * 0.06, v: prof.n });
+    if (prof.armor >= 85) cand.push({ id: 'acido', score: 0.2 + (prof.armor - 85) / 100, v: prof.armor });
+    const chosen = cand.sort((a, b) => b.score - a.score).slice(0, nCounters);
+    if (!chosen.length) return;
+    const intel = { counters: [], antiHeal: 0, huntId: null, huntName: null };
+    for (const ch of chosen) {
+      const def = D.COUNTERS[ch.id];
+      intel.counters.push({ id: ch.id, why: def.why(ch.v, ch.n) });
+      if (def.antiHeal) intel.antiHeal = def.antiHeal;
+      if (ch.id === 'cacada') { intel.huntId = prof.carryId; intel.huntName = prof.carryName; }
+      const m = def.mods;
+      for (const e of r.enemies) {
+        if (!Object.keys(m).length) break;
+        e.cmods = e.cmods ? mergeMods(e.cmods, m) : { ...m };
+      }
+      if (def.ambush) withRng(rng => {
+        const cands = rng.shuffle(r.enemies.filter(e => !e.isBoss && !e.isElite && !e.ambush && e.archetypeId !== 'sombra'));
+        cands.slice(0, Math.round(r.enemies.length * def.ambush * (coop ? 0.5 : 1))).forEach(e => { e.ambush = true; });
+      });
+    }
+    r.intel = intel;
+    log(`🧠 Inteligência inimiga: ${intel.counters.map(c => `${D.COUNTERS[c.id].icon} ${D.COUNTERS[c.id].name}`).join(' + ')}.`, 'danger');
+  }
+  function mergeMods(a, b) {
+    const o = { ...a };
+    for (const [k, v] of Object.entries(b)) {
+      if (k.endsWith('Mult')) o[k] = (o[k] || 1) * v;
+      else if (k === 'chain') o[k] = Math.max(o[k] || 0, v);
+      else o[k] = (o[k] || 0) + v;
+    }
+    return o;
+  }
+  G.activeSynergies = function () {
+    const ec = G.synergyCounts(), oc = G.orderCounts();
+    return Object.keys(D.ELEMENTS).filter(k => E.synergyTier(ec[k] || 0) > 0).length + Object.values(D.ORDERS).filter(o => E.orderTier(oc[o.id] || 0, o) > 0).length;
+  };
+  function pickObjective(type) {
+    const r = G.run;
+    const lim = r.players.reduce((s, p) => s + p.teamLimit, 0);
+    const list = [
+      { id: 'blitz', p: type === 'chefe' ? 32 : type === 'elite' ? 20 : 15 },
+      { id: 'intacto' },
+      { id: 'vitalidade', p: type === 'chefe' ? 35 : 55 },
+      { id: 'prisma', p: Math.min(5, 2 + Math.floor(r.act / 2)) }
+    ];
+    if (lim >= 3) list.push({ id: 'enxuto', p: Math.max(1, lim - 2) });
+    if (type !== 'combate') list.push({ id: 'carrasco', p: type === 'chefe' ? 30 : 12 });
+    const o = withRng(rng => rng.pick(list));
+    const def = D.OBJECTIVES[o.id];
+    const gold = Math.round((14 + r.room * 2.2) * (type === 'combate' ? 1 : 1.5) * G.goldFactor());
+    o.reward = def.reward === 'gold' ? { kind: 'gold', amount: gold, text: `+${gold}g${G.isCoop() ? ' cada' : ''}` }
+      : def.reward === 'xp' ? { kind: 'xp', amount: 0.5, text: '+50% de XP para o time' }
+      : { kind: 'item', tier: r.act >= 3 ? 2 : 1, text: `item ★${r.act >= 3 ? 2 : 1}${G.isCoop() ? ' para cada jogador' : ''}` };
+    return o;
+  }
+  G.objectiveText = (o) => o ? D.OBJECTIVES[o.id].text(o.p) : '';
+  function evalObjective(o, c, report, won) {
+    if (!o || !won) return false;
+    const res = c.result;
+    switch (o.id) {
+      case 'blitz': return res.time <= o.p;
+      case 'intacto': return report.every(x => x.survived);
+      case 'enxuto': return (c.startBoard || 99) <= o.p;
+      case 'prisma': return (c.startSyn || 0) >= o.p;
+      case 'vitalidade': {
+        const pl = c.units.filter(u => u.team === 'player' && !u.isSummon);
+        return pl.reduce((s, u) => s + Math.max(0, u.hp), 0) / Math.max(1, pl.reduce((s, u) => s + u.stats.maxHp, 0)) * 100 >= o.p;
+      }
+      case 'carrasco': return res.leaderAt !== null && res.leaderAt !== undefined && res.leaderAt <= o.p;
+    }
+    return false;
+  }
+
   /* Ameaça (modo Dinâmica): sobe com vitórias dominantes, cai com derrotas */
   function updateThreat(won, report, time) {
     const r = G.run;
@@ -677,7 +897,11 @@
       const p = G.P(rep.owner); p.kills += rep.kills; p.dmg += rep.dmgDealt; p.heal += rep.healDone;
     }
     r.stats.kills += report.reduce((s, x) => s + x.kills, 0);
-    const pool = Math.round(G.playerXpPool() * rm);
+    const objDone = evalObjective(r.objective, c, report, res.won);
+    let pool = Math.round(G.playerXpPool() * rm);
+    if (objDone && r.objective.reward.kind === 'xp') pool = Math.round(pool * (1 + r.objective.reward.amount));
+    if (r.objective) rewards.objective = { id: r.objective.id, text: G.objectiveText(r.objective), done: objDone, reward: r.objective.reward.text, won: res.won };
+    if (objDone) { r.stats.objectives = (r.stats.objectives || 0) + 1; G.emitAch({ type: 'objective', total: r.stats.objectives }); }
     const th = updateThreat(res.won, report, res.time);
     rewards.threat = th;
     const splitXp = (mult) => {
@@ -709,6 +933,7 @@
         lines.push(`🪙 ${G.isCoop() ? p.name + ': ' : ''}+${gold}g, +${interest}g de juros${trans ? `, +${trans}g Transmutação` : ''}`);
       }
       splitXp(1);
+      if (objDone && r.objective.reward.kind === 'gold') for (const p of r.players) { p.gold += r.objective.reward.amount; r.stats.goldEarned += r.objective.reward.amount; }
       log(`🏆 Sala ${r.room} vencida! +${gold}g${G.isCoop() ? ' por jogador' : ''}.`, 'win');
 
       const pend = [];
@@ -717,6 +942,8 @@
         if (withRng(rng => rng.chance(C.NORMAL_ITEM_DROP))) giveItem(nextChooser(), rollItem(1), 'Item encontrado');
         else rewards.extras.push({ icon: '🎲', text: `Sem item desta vez (chance de ${Math.round(C.NORMAL_ITEM_DROP * 100)}% em combates comuns).`, dim: true });
       }
+      if (objDone && r.objective.reward.kind === 'item') for (const p of r.players) giveItem(p.id, rollItem(r.objective.reward.tier), 'Objetivo bônus');
+      if (objDone) log(`🎖️ Objetivo cumprido: ${G.objectiveText(r.objective)} (${r.objective.reward.text}).`, 'win');
       if (r.roomType === 'elite') { r.stats.elites++; giveItem(nextChooser(), rollItem(1), 'Item de Elite'); pend.push(makeRelicChoice('elite')); rewards.relic = 'elite'; }
       if (G.hasRelic('ovo_dourado')) {
         r.flags.eggWins++;
@@ -813,11 +1040,12 @@
   }
   function storyTutorial() {
     return { kind: 'story', icon: '🧭', title: 'Primeiros passos', tutorial: true, button: 'Entendi!', paragraphs: [
-      '<b>1. Recrute.</b> Clique nos arquétipos da loja (abaixo do tabuleiro). Cada um tem uma Classe e uma Origem — juntar unidades da mesma ativa sinergias.',
+      '<b>1. Recrute.</b> Contrate recrutas no 🏰 Quartel (parte de baixo da tela). Eles mudam a cada sala e podem ter qualidade e traços; 📜 Contratos garantem qualquer arquétipo por um preço maior. Juntar unidades da mesma Classe/Origem ativa sinergias.',
       '<b>2. Posicione.</b> Arraste as unidades no seu lado do campo (linhas de baixo). Tanques na frente, atiradores e magos atrás — ou use 🧭 Auto-posicionar.',
       '<b>3. Escolha o caminho.</b> No 🗺️ Mapa, cada nó é uma sala: combates dão XP e ouro; Forja, Mercador e Santuário dão recursos.',
       '<b>4. Evolua.</b> O XP da sala é <b>dividido</b> entre quem está em campo. Cada nível dá 1 PE: aprimore habilidades ou absorva elementos (botão ⭐ Evoluir).',
-      '<b>5. Sobreviva.</b> Derrotas custam Vida da Cidadela. Chegue ao fim dos 4 Atos!'
+      '<b>5. Leia o inimigo.</b> Acima do tabuleiro aparecem a <b>doutrina</b> da horda, a <b>inteligência inimiga</b> (contramedidas contra o seu estilo, a partir do Ato II) e um <b>objetivo bônus</b>. Responda com composição, posição e <b>Tática</b>.',
+      '<b>6. Sobreviva.</b> Derrotas custam Vida da Cidadela. Chegue ao fim dos 4 Atos!'
     ] };
   }
 

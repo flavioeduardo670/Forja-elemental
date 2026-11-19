@@ -421,9 +421,123 @@
       elite: [0.65, 2.0, 3.2, 5.2],
       chefe: [1.2, 2.6, 2.4, 6.0]
     },
-    kMin: 0.6, kMax: 4.5, ascPer: 0.08, coopMult: [2.0, 3.0, 3.6, 3.8],
+    kMin: 0.6, kMax: 4.5, ascPer: 0.08, coopMult: [1.5, 2.2, 2.6, 2.8],
     threatMin: -3, threatMax: 10, threatPer: 0.07, rewardPer: 0.06
   };
 
-  FE.Data = { SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
+
+  /* ======================================================================
+     v3.0 — CAMADA ESTRATÉGICA
+     ====================================================================== */
+  /* Doutrinas: cada horda comum/elite tem um "plano de batalha" visível antes da luta.
+     A escala de poder normaliza a força total; a doutrina muda COMO o inimigo luta,
+     então a resposta certa é composição, posicionamento e tática. */
+  const DOCTRINES = {
+    bando: { id: 'bando', name: 'Bando Desorganizado', icon: '🏴', color: '#94a3b8', minRoom: 1,
+      desc: 'Uma mistura sem plano. Sem forças nem fraquezas especiais.', weak: 'Qualquer composição sólida resolve.', counters: [], mods: {} },
+    muralha: { id: 'muralha', tune: 1.6, name: 'Muralha de Escudos', icon: '🛡️', color: '#60a5fa', minRoom: 2,
+      pool: ['vanguarda', 'vanguarda', 'vanguarda', 'paladino', 'paladino', 'monge', 'clerigo', 'cacador'],
+      desc: 'Tanques couraçados em linha: +60% de armadura e +15% de vida, mas atacam 15% mais devagar.',
+      weak: 'Dano mágico (ignora 55% da armadura), penetração de armadura e dano verdadeiro (Solar).', counters: ['arcanista', 'alquimista', 'necromante', 'druida'],
+      mods: { armorMult: 1.6, hpMult: 1.15, asMult: 0.85 } },
+    emboscada: { id: 'emboscada', coopTune: 0.9, tune: 0.82, name: 'Emboscada', icon: '🗡️', color: '#f43f5e', minRoom: 3,
+      pool: ['sombra', 'sombra', 'sombra', 'lanceiro', 'berserker', 'monge', 'cacador'], ambush: 0.55,
+      desc: 'Metade da horda salta direto para a sua retaguarda no início da luta. +12% de dano, −8% de vida.',
+      weak: 'Deixe a última fileira com tanques (ou vazia); esquiva, espinhos e a tática Falange seguram o salto.', counters: ['vanguarda', 'paladino', 'berserker'],
+      mods: { adMult: 1.12, hpMult: 0.92 } },
+    artilharia: { id: 'artilharia', coopTune: 0.85, tune: 0.82, name: 'Artilharia', icon: '🏹', color: '#34d399', minRoom: 2, formation: 'back',
+      pool: ['cacador', 'cacador', 'cacador', 'arcanista', 'arcanista', 'alquimista', 'artifice'], front: ['vanguarda', 'vanguarda'],
+      desc: 'Atiradores e magos na retaguarda atrás de dois escudeiros: +15% de dano, −12% de vida.',
+      weak: 'Sombras saltam até eles; a tática Caça à Retaguarda e escudos iniciais (Pedra) aguentam a primeira saraivada.', counters: ['sombra', 'monge', 'lanceiro'],
+      mods: { dmgMult: 1.15, hpMult: 0.88 } },
+    enxame: { id: 'enxame', tune: 1.35, name: 'Enxame', icon: '🐝', color: '#facc15', minRoom: 3, countMult: 1.8,
+      desc: 'Quase o dobro de inimigos, cada um com metade da força.',
+      weak: 'Dano em área: Alquimista, Arcanista, giro do Berserker, explosões de Fogo e ricochete de Ar.', counters: ['alquimista', 'arcanista', 'berserker', 'lanceiro'],
+      mods: { hpMult: 0.55, adMult: 0.62, apMult: 0.62 } },
+    sacerdocio: { id: 'sacerdocio', tune: 1.15, name: 'Sacerdócio', icon: '⚕️', color: '#86efac', minRoom: 4, formation: 'back',
+      pool: ['clerigo', 'clerigo', 'druida', 'druida', 'bardo', 'paladino'], front: ['vanguarda', 'vanguarda', 'paladino'],
+      desc: 'Curandeiros protegidos por uma linha de frente: cura +50%.',
+      weak: 'Mate os curandeiros primeiro: Sombras, tática Caça à Retaguarda e dano explosivo. Lunar executa.', counters: ['sombra', 'cacador', 'arcanista'],
+      mods: { healMult: 1.5, hpMult: 1.05 } },
+    ritual: { id: 'ritual', coopTune: 0.8, tune: 1.0, name: 'Ritual Arcano', icon: '🔮', color: '#c084fc', minRoom: 5, formation: 'back',
+      pool: ['arcanista', 'arcanista', 'alquimista', 'necromante', 'necromante', 'bardo', 'druida'], front: ['vanguarda', 'monge'],
+      desc: 'Conjuradores começam com +35 de mana e regeneram 50% mais rápido: as habilidades chegam cedo.',
+      weak: 'Vença rápido (tática Assalto); escudos de Pedra/Artífice absorvem as rajadas; Sombras alcançam os magos.', counters: ['sombra', 'vanguarda', 'artifice'],
+      mods: { startMana: 35, manaRegenMult: 1.5, apMult: 1.1 } },
+    furia: { id: 'furia', tune: 1.1, name: 'Horda Furiosa', icon: '🪓', color: '#fb923c', minRoom: 4,
+      pool: ['berserker', 'berserker', 'berserker', 'lanceiro', 'lanceiro', 'monge', 'vanguarda'],
+      desc: 'Brutamontes com +15% de roubo de vida e +15% de vel. de ataque, porém com −20% de armadura.',
+      weak: 'Espinhos e armadura (Vanguarda, Pedra), congelamento de Água e a tática Falange.', counters: ['vanguarda', 'paladino', 'artifice'],
+      mods: { lifesteal: 0.15, asMult: 1.15, armorMult: 0.8 } }
+  };
+
+  /* Inteligência inimiga (a partir do Ato II): a horda estuda o SEU exército
+     e prepara contramedidas. Diversificar é a resposta. */
+  const COUNTERS = {
+    placas: { id: 'placas', name: 'Placas Reforçadas', icon: '🔩', color: '#93c5fd', why: (v) => `${Math.round(v * 100)}% do seu dano é físico`,
+      desc: 'Armadura dos inimigos +40% (+15).', answer: 'Misture dano mágico (Arcanista, Alquimista, Necromante, Druida) ou penetração.', mods: { armorMult: 1.4, armorAdd: 15 } },
+    runas: { id: 'runas', name: 'Runas de Proteção', icon: '🔰', color: '#d8b4fe', why: (v) => `${Math.round(v * 100)}% do seu dano é mágico`,
+      desc: 'Inimigos recebem 30% menos dano mágico.', answer: 'Misture dano físico (Caçador, Berserker, Lanceiro, Sombra).', mods: { magicReduce: 0.30 } },
+    cacada: { id: 'cacada', name: 'Caçada ao Campeão', icon: '🎯', color: '#f87171', why: (v, n) => `${n} carrega ${Math.round(v * 100)}% do poder do time`,
+      desc: 'Todos os inimigos tentam matar a sua unidade mais forte primeiro.', answer: 'Proteja-a: posicione atrás de tanques, dê escudo/vida — ou espalhe o poder entre mais unidades.', mods: {} },
+    batedores: { id: 'batedores', name: 'Batedores', icon: '🦅', color: '#fb7185', why: (v) => `${Math.round(v * 100)}% do seu time ataca à distância`,
+      desc: '35% da horda flanqueia e salta para a sua retaguarda.', answer: 'Guarde a retaguarda com um tanque ou use a tática Falange.', mods: {}, ambush: 0.35 },
+    veneno: { id: 'veneno', name: 'Lâminas Envenenadas', icon: '🧪', color: '#a3e635', why: (v) => `você depende de ${v} curandeiro(s)`,
+      desc: 'Toda cura recebida pelo seu time é reduzida em 40%.', answer: 'Escudos (Pedra, Artífice, Paladino) e roubo de vida sofrem menos; ou mate mais rápido.', mods: {}, antiHeal: 0.4 },
+    barragem: { id: 'barragem', name: 'Fogo de Barragem', icon: '💥', color: '#fdba74', why: (v) => `você luta com ${v} unidades`,
+      desc: 'Inimigos ganham ataques em cadeia (ricochete) e +10% de dano.', answer: 'Menos unidades e mais fortes, ou espalhe-as pelo tabuleiro.', mods: { chain: 2, dmgMult: 1.1 } },
+    acido: { id: 'acido', name: 'Ácido Corrosivo', icon: '🫗', color: '#bef264', why: (v) => `armadura média alta (${Math.round(v)})`,
+      desc: 'Ataques inimigos ignoram 35% da armadura.', answer: 'Esquiva, escudos e vida valem mais que armadura nesta luta.', mods: { armorPen: 0.35 } }
+  };
+
+  /* Objetivos bônus: opcionais, aparecem antes da luta e pagam no relatório */
+  const OBJECTIVES = {
+    blitz: { id: 'blitz', icon: '⏱️', name: 'Blitz', text: (p) => `Vença em até ${p}s`, reward: 'gold' },
+    intacto: { id: 'intacto', icon: '🛡️', name: 'Sem Baixas', text: () => 'Vença sem perder nenhuma unidade', reward: 'xp' },
+    enxuto: { id: 'enxuto', icon: '👥', name: 'Pelotão Enxuto', text: (p) => `Vença com no máximo ${p} unidade(s) em campo`, reward: 'item' },
+    prisma: { id: 'prisma', icon: '🌈', name: 'Prisma', text: (p) => `Vença com ${p}+ sinergias ativas`, reward: 'gold' },
+    vitalidade: { id: 'vitalidade', icon: '❤️', name: 'Vitalidade', text: (p) => `Termine com ${p}%+ da vida total do time`, reward: 'xp' },
+    carrasco: { id: 'carrasco', icon: '👑', name: 'Regicida', text: (p) => `Derrote o líder inimigo em até ${p}s`, reward: 'item', leader: true }
+  };
+
+  /* Táticas: a postura do seu exército na próxima luta (troque a cada sala) */
+  const TACTICS = {
+    equilibrio: { id: 'equilibrio', name: 'Equilíbrio', icon: '⚖️', desc: 'Sem bônus nem penalidades. Cada unidade escolhe seu alvo normalmente.', mods: {} },
+    assalto: { id: 'assalto', name: 'Assalto', icon: '⚔️', desc: '+15% de dano causado, −10% de armadura. Bom para vencer rápido.', mods: { dmgMult: 1.15, armorMult: 0.9 } },
+    falange: { id: 'falange', name: 'Falange', icon: '🛡️', desc: '+20% de armadura e escudo inicial de 8% da vida; −12% de vel. de ataque.', mods: { armorMult: 1.2, shieldPct: 0.08, asMult: 0.88 } },
+    retaguarda: { id: 'retaguarda', name: 'Caça à Retaguarda', icon: '🏹', desc: 'Todos priorizam curandeiros, magos e atiradores inimigos (mesmo que precisem atravessar a linha de frente). +8% de dano.', mods: { dmgMult: 1.08 }, target: 'back' },
+    foco: { id: 'foco', name: 'Fogo Concentrado', icon: '🎯', desc: 'Todos atacam o inimigo com menos vida ao alcance, derrubando um por um. +8% de crítico.', mods: { crit: 0.08 }, target: 'low' }
+  };
+
+  /* Quartel: recrutas com traço e qualidade */
+  const TRAITS = {
+    robusto: { id: 'robusto', name: 'Robusto', icon: '💪', rare: false, desc: '+18% de vida.', mods: { hpMult: 1.18 } },
+    afiado: { id: 'afiado', name: 'Afiado', icon: '🗡️', rare: false, desc: '+15% de dano físico (AD).', mods: { adMult: 1.15 } },
+    erudito: { id: 'erudito', name: 'Erudito', icon: '📚', rare: false, desc: '+15% de poder mágico (AP) e +10 de mana inicial.', mods: { apMult: 1.15, startMana: 10 } },
+    agil: { id: 'agil', name: 'Ágil', icon: '⚡', rare: false, desc: '+14% de velocidade de ataque.', mods: { asMult: 1.14 } },
+    couracado: { id: 'couracado', name: 'Couraçado', icon: '🛡️', rare: false, desc: '+20 de armadura.', mods: { armorAdd: 20 } },
+    preciso: { id: 'preciso', name: 'Preciso', icon: '🎯', rare: false, desc: '+12% de chance de crítico.', mods: { crit: 0.12 } },
+    esquivo: { id: 'esquivo', name: 'Esquivo', icon: '🌫️', rare: false, desc: '+10% de esquiva.', mods: { dodge: 0.10 } },
+    barganha: { id: 'barganha', name: 'Barganha', icon: '💰', rare: false, desc: 'Custa 35% menos para contratar.', mods: {}, costMult: 0.65 },
+    prodigio: { id: 'prodigio', name: 'Prodígio', icon: '🧠', rare: false, desc: 'Recebe +30% de XP.', mods: {}, xp: 0.30 },
+    afinidade: { id: 'afinidade', name: 'Afinidade', icon: '💠', rare: false, desc: 'Já chega com 1 stack de um elemento.', mods: {} },
+    sanguinario: { id: 'sanguinario', name: 'Sanguinário', icon: '🩸', rare: true, desc: '+12% de roubo de vida e +8% de dano.', mods: { lifesteal: 0.12, dmgMult: 1.08 } },
+    inabalavel: { id: 'inabalavel', name: 'Inabalável', icon: '🗿', rare: true, desc: 'Recebe 10% menos dano de todas as fontes.', mods: { dmgReduce: 0.10 } },
+    carrasco: { id: 'carrasco', name: 'Carrasco', icon: '💀', rare: true, desc: '+25% de dano contra alvos abaixo de 45% de vida.', mods: { execute: 0.25 } },
+    duelista: { id: 'duelista', name: 'Duelista', icon: '🤺', rare: true, desc: '+22% de dano contra alvos acima de 70% de vida.', mods: { highHp: 0.22 } },
+    talentoso: { id: 'talentoso', name: 'Talentoso', icon: '✨', rare: true, desc: 'Chega com +1 Ponto de Evolução extra.', mods: {}, pe: 1 },
+    lider: { id: 'lider', name: 'Líder Nato', icon: '🎖️', rare: true, desc: 'Inspira aliados próximos: +6% de dano para quem estiver a até 2,5 casas.', mods: { inspire: 0.06 } }
+  };
+  const QUARTEL = {
+    slots: 5, rerollBase: 2, rerollStep: 1, contractMult: 1.5,
+    quality: [
+      { id: 0, name: 'Recruta', color: '#94a3b8', level: 1, costMult: 1.0, traitChance: 0.5 },
+      { id: 1, name: 'Veterano', color: '#60a5fa', level: 2, costMult: 1.75, traitChance: 0.8 },
+      { id: 2, name: 'Herói', color: '#fbbf24', level: 3, costMult: 2.7, traitChance: 1, rareTrait: true }
+    ],
+    odds: [[0.86, 0.14, 0], [0.64, 0.31, 0.05], [0.5, 0.38, 0.12], [0.4, 0.42, 0.18]],
+    synergyBias: 0.3
+  };
+
+  FE.Data = { DOCTRINES, COUNTERS, OBJECTIVES, TACTICS, TRAITS, QUARTEL, SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);

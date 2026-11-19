@@ -8,7 +8,7 @@
   const FE = root.FE, D = FE.Data, C = D.CONFIG, G = FE.Game, R = FE.Render;
   const $ = (id) => document.getElementById(id);
   const esc = FE.util.esc;
-  const UI = FE.UI = { drag: null, inspectEnemyId: null, synTab: 'el', modalKind: null, mapDismissed: false, lastPhase: null, codexTab: 'guia', evoUnitId: null, titleAsc: 0, titleScaling: 'dinamica' };
+  const UI = FE.UI = { drag: null, inspectEnemyId: null, synTab: 'el', modalKind: null, mapDismissed: false, lastPhase: null, codexTab: 'guia', evoUnitId: null, titleAsc: 0, titleScaling: 'dinamica', shopTab: 'rec', leftTab: 'syn' };
   const USER_MODALS = ['evo', 'codex', 'meta', 'settings', 'menu', 'ach', 'credits', 'give'];
   const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -76,13 +76,15 @@
     if (!r) return;
     $('hud-act').textContent = `${D.ACTS[r.act].short} • ${D.ACTS[r.act].name}${r.ascension ? ` • Asc. ${r.ascension}` : ''}`;
     $('hud-room').textContent = `${r.room} / ${C.TOTAL_ROOMS}`;
-    $('hud-citadel').textContent = `❤️ ${r.citadelHp}/${r.citadelMax}`;
+    $('hud-citadel').textContent = `${r.citadelHp}/${r.citadelMax}`;
+    $('hud-citadel').parentElement.parentElement.classList.toggle('low', r.citadelHp / r.citadelMax < 0.35);
+    refreshTrack();
     $('hud-citadel-bar').style.width = `${Math.round(r.citadelHp / r.citadelMax * 100)}%`;
     const me = G.me(), mine = G.boardOf(me.id).length, cap = G.capPerPlayer();
     $('hud-gold').textContent = `${me.gold}g`;
     $('hud-gold-label').textContent = G.isCoop() ? `Ouro • ${me.name}` : 'Ouro';
     const team = $('hud-team');
-    $('hud-team-label').textContent = G.isCoop() ? `${me.name} (teto ${cap})` : 'Comp';
+    $('hud-team-label').innerHTML = G.isCoop() ? `Em campo • <b style="color:${me.color}">${esc(me.name)}</b> (teto ${cap})` : 'Unidades em campo';
     team.textContent = `${mine} / ${me.teamLimit}`;
     team.className = mine > me.teamLimit ? 'crimson-text' : 'emerald-text';
     const edit = G.canEdit();
@@ -92,11 +94,17 @@
     });
     const pool = G.playerXpPool(), n = Math.max(1, mine);
     $('hud-xp').innerHTML = `${G.isCoop() ? 'Sua parte' : 'Pool'}: ${pool} XP ÷ ${n} = <span class="gold-text">${Math.floor(pool / n)} XP/unid</span>`;
+    const pe = G.totalEvo(G.isCoop() ? me.id : undefined);
+    $('cmd-summary').innerHTML = `<div ${tipAttr('Poder do seu elenco (melhores unidades até o limite), a mesma medida que a escala de poder usa.')}><span>Poder do elenco</span><b>⚔ ${fmt(G.rosterPower())}</b></div>
+      <div><span>Sinergias ativas</span><b>✦ ${G.activeSynergies()}</b></div>
+      <div><span>Tática</span><b>${D.TACTICS[r.tactic || 'equilibrio'].icon} ${D.TACTICS[r.tactic || 'equilibrio'].name}</b></div>
+      <div><span>Juros na próxima vitória</span><b class="gold-text">+${Math.min(C.INTEREST_CAP, Math.floor(me.gold * C.INTEREST_RATE))}g</b></div>
+      <div><span>PE para gastar</span><b class="${pe ? 'violet-text' : ''}">⭐ ${pe}</b></div>`;
     $('hud-strategy').textContent = n === 1 ? '👑 Hyper-Carry Solo (100% XP)' : n <= 3 ? '⚡ Trio de Elite (nível ultra-rápido)' : n <= 7 ? '⚖️ Composição Equilibrada' : '🌊 Exército Massivo (sinergias máximas)';
     const bar = $('hud-relics');
     bar.innerHTML = r.relics.length
       ? r.relics.map(id => `<div class="relic-badge" style="--rc:${D.RARITY[D.RELICS[id].rarity].color}" ${tipAttr(relicTip(id))}>${D.RELICS[id].icon}</div>`).join('')
-      : '<span style="font-size:10.5px;color:var(--text-muted);font-weight:700;">Relíquias (0)</span>';
+      : '<span class="shelf-empty">Nenhuma ainda — vêm de Elites, Chefes e Mistérios.</span>';
     $('footer-note').innerHTML = `Forja Elemental v${FE.VERSION} • ${G.isCoop() ? `Co-op ${G.coop()} jogadores` : 'Solo'}${r.daily ? ' • 📅 Desafio Diário' : ''} • seed <b>${esc(r.seed)}</b>${r.ascension ? ` • Ascensão ${r.ascension}` : ''} • progresso salvo automaticamente neste navegador`;
     refreshPlayers();
   }
@@ -154,9 +162,59 @@
     const ov = $('board-overlay');
     const showOv = r.phase === 'MAP' && UI.modalKind !== 'map';
     ov.classList.toggle('show', showOv);
-    $('overlay-text').textContent = r.board.length ? 'Ajuste composição, itens e evoluções. Depois escolha o próximo caminho.' : 'Recrute unidades na loja abaixo e depois escolha o primeiro caminho.';
-    $('log-badge').textContent = r.phase === 'PREP' ? `Sala ${r.room}` : '';
-    refreshPowerPanel(); refreshRewardStrip(); refreshThreat();
+    $('overlay-text').textContent = r.board.length ? 'Ajuste composição, itens e evoluções. Depois escolha o próximo caminho.' : 'Contrate recrutas no Quartel abaixo e depois escolha o primeiro caminho.';
+    $('log-badge').textContent = r.room ? `S${r.room}` : '';
+    refreshPowerPanel(); refreshRewardStrip(); refreshThreat(); refreshIntel(); refreshTactics();
+  }
+
+  /* ======================= TRILHA DA CAMPANHA ======================= */
+  function refreshTrack() {
+    const r = G.run, el = $('campaign-track');
+    if (!r) { el.innerHTML = ''; return; }
+    let h = '';
+    for (let a = 1; a <= C.ACTS; a++) {
+      const pips = [];
+      for (let i = 1; i <= C.ROOMS_PER_ACT; i++) {
+        const room = (a - 1) * C.ROOMS_PER_ACT + i;
+        const st = room < r.room || (room === r.room && (r.phase === 'MAP' || r.phase === 'CHOICE') && !r.enemies.length && r.room > 0) ? 'done' : room === r.room ? 'cur' : '';
+        const boss = i === C.ROOMS_PER_ACT;
+        pips.push(`<i class="pip ${st} ${boss ? 'boss' : ''}" ${tipAttr(boss ? `<b>Sala ${room}</b> — ${D.BOSSES[a].symbol} ${D.BOSSES[a].name}` : `Sala ${room}`)}>${boss ? D.BOSSES[a].symbol : ''}</i>`);
+      }
+      h += `<div class="act-seg ${a === r.act ? 'cur' : a < r.act ? 'done' : ''}"><span class="act-lbl">${D.ACTS[a].short}</span><div class="pips">${pips.join('')}</div></div>`;
+    }
+    el.innerHTML = h;
+  }
+
+  /* ======================= INTELIGÊNCIA, DOUTRINA, OBJETIVO E TÁTICA ======================= */
+  function refreshIntel() {
+    const r = G.run, el = $('intel-panel');
+    const live = r.phase === 'PREP' && r.enemies.length;
+    if (!live) { el.style.display = 'none'; return; }
+    el.style.display = 'grid';
+    let doc = '';
+    if (r.roomType === 'chefe') {
+      const b = D.BOSSES[r.act];
+      doc = `<div class="intel-card doc" style="--ic:${b.color || '#facc15'}"><div class="ic-head"><span class="ic-ic">${b.symbol}</span><div><span class="ic-kicker">Chefe do Ato</span><b>${b.name}</b></div></div><p>${b.mechanic}</p></div>`;
+    } else if (r.doctrine) {
+      const d = D.DOCTRINES[r.doctrine];
+      doc = `<div class="intel-card doc" style="--ic:${d.color}"><div class="ic-head"><span class="ic-ic">${d.icon}</span><div><span class="ic-kicker">Doutrina inimiga</span><b>${d.name}</b></div></div>
+        <p>${d.desc}</p><p class="ic-weak"><b>Fraqueza:</b> ${d.weak}${d.counters.length ? ` <span class="ic-arch">${d.counters.map(a => `<span ${tipAttr(archTip(D.ARCHETYPES[a]))}>${D.ARCHETYPES[a].symbol}</span>`).join('')}</span>` : ''}</p></div>`;
+    }
+    const intel = r.intel;
+    const ctr = intel && intel.counters.length ? `<div class="intel-card ctr"><div class="ic-head"><span class="ic-ic">🧠</span><div><span class="ic-kicker">Inteligência inimiga</span><b>Eles estudaram você</b></div></div>
+      ${intel.counters.map(c => { const d = D.COUNTERS[c.id]; return `<div class="ctr-line" style="--ic:${d.color}" ${tipAttr(`<b>${d.icon} ${d.name}</b><br>${d.desc}<br><br><b>Como responder:</b> ${d.answer}`)}><span class="ctr-name">${d.icon} ${d.name}</span><span class="ctr-why">porque ${c.why}</span><span class="ctr-eff">${d.desc}</span></div>`; }).join('')}</div>`
+      : r.act >= 2 ? '<div class="intel-card ctr calm"><div class="ic-head"><span class="ic-ic">🧠</span><div><span class="ic-kicker">Inteligência inimiga</span><b>Nenhuma contramedida</b></div></div><p>Seu exército está equilibrado: a horda não achou um ponto fraco para explorar.</p></div>'
+      : '<div class="intel-card ctr calm"><div class="ic-head"><span class="ic-ic">🧠</span><div><span class="ic-kicker">Inteligência inimiga</span><b>Desperta no Ato II</b></div></div><p>A partir do Ato II as hordas analisam seu exército e preparam contramedidas.</p></div>';
+    const o = r.objective;
+    const obj = o ? `<div class="intel-card obj"><div class="ic-head"><span class="ic-ic">${D.OBJECTIVES[o.id].icon}</span><div><span class="ic-kicker">Objetivo bônus</span><b>${G.objectiveText(o)}</b></div></div><p class="ic-reward">Recompensa: <b>${o.reward.text}</b></p></div>` : '';
+    el.innerHTML = doc + ctr + obj;
+  }
+  function refreshTactics() {
+    const r = G.run, el = $('tactic-bar');
+    if (r.phase !== 'PREP') { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    const edit = r.phase === 'PREP';
+    el.innerHTML = `<span class="tb-lbl">Tática</span>` + Object.values(D.TACTICS).map(t => `<button class="tactic ${r.tactic === t.id ? 'active' : ''}" data-tactic="${t.id}" ${edit ? '' : 'disabled'} ${tipAttr(`<b>${t.icon} ${t.name}</b><br>${t.desc}`)}><span>${t.icon}</span>${t.name}</button>`).join('');
   }
 
   /* ======================= SINERGIAS ======================= */
@@ -188,7 +246,7 @@
         <div class="synergy-top"><span class="synergy-name" style="color:${e.tier ? e.color : 'var(--text-primary)'}">${e.icon} ${e.name} (${e.n})<span class="kind-tag">${e.kind}</span></span>
         <div class="synergy-tiers">${e.th.map(t => `<span class="tier-badge ${e.n >= t ? 'reached' : ''}">${t}</span>`).join('')}</div></div>
         <div class="synergy-desc">${e.desc}</div>${e.members ? `<div class="synergy-members">${e.members}</div>` : ''}</div>`;
-    $('syn-count').textContent = `${active.length} ativa(s)`;
+    $('syn-count').textContent = active.length;
     list.innerHTML =
       (active.length ? `<div class="syn-section"><span>Ativas</span></div>${active.map(e => card(e, false)).join('')}` : '') +
       (partial.length ? `<div class="syn-section"><span>Em progresso</span></div>${partial.map(e => card(e, true)).join('')}` : '') +
@@ -201,7 +259,7 @@
   function fairRatio() {
     const r = G.run, i = Math.min(3, r.act - 1);
     let t = (SCL.targets[r.roomType] || SCL.targets.combate)[i];
-    if (r.players.length > 1) t *= SCL.coopMult[i] * (1 + (3 - r.players.length) * 0.14);
+    t *= G.coopFactor();
     return t;
   }
   UI.difficulty = function () {
@@ -259,34 +317,60 @@
     grid.innerHTML = me.bench.map((u, i) => {
       if (!u) return `<div class="bench-slot" data-slot="${i}"></div>`;
       const a = D.ARCHETYPES[u.archetypeId];
-      return `<div class="bench-slot occupied ${G.selectedId === u.id ? 'selected' : ''}" data-slot="${i}" data-unit="${u.id}" ${tipAttr(`<b>${a.symbol} ${esc(u.name)}</b> — Nv.${u.level}<br>Arraste para o campo • duplo clique envia`)}>
+      return `<div class="bench-slot occupied ${G.selectedId === u.id ? 'selected' : ''}" data-slot="${i}" data-unit="${u.id}" ${tipAttr(`<b>${a.symbol} ${esc(u.name)}</b> — Nv.${u.level}${u.trait ? `<br>${D.TRAITS[u.trait].icon} ${D.TRAITS[u.trait].name}: ${D.TRAITS[u.trait].desc}` : ''}<br>Arraste para o campo • duplo clique envia`)}>
         <span class="bench-lvl">Nv.${u.level}</span>${u.evoPoints > 0 ? '<span class="bench-evo-dot">+</span>' : ''}
-        <div class="bench-token" style="background:${a.color}35;border-color:${a.color};">${a.symbol}</div></div>`;
+        <div class="bench-token q${u.quality || 0}" style="background:${a.color}35;border-color:${a.color};">${a.symbol}</div>${u.trait ? `<span class="bench-trait">${D.TRAITS[u.trait].icon}</span>` : ''}</div>`;
     }).join('');
   }
 
-  /* ======================= LOJA ======================= */
+  /* ======================= QUARTEL ======================= */
+  const QT = D.QUARTEL;
+  const MAXS = (() => { const m = { hp: 0, ad: 0, ap: 0, range: 0 }; for (const a of Object.values(D.ARCHETYPES)) { m.hp = Math.max(m.hp, a.stats.maxHp); m.ad = Math.max(m.ad, a.stats.ad * a.stats.attackSpeed); m.ap = Math.max(m.ap, a.stats.ap); m.range = Math.max(m.range, a.stats.range); } return m; })();
+  function statBars(a) {
+    const b = (lbl, v, max, cls) => `<div class="sb"><span>${lbl}</span><div class="sb-track"><div class="sb-fill ${cls}" style="width:${Math.max(6, Math.round(v / max * 100))}%"></div></div></div>`;
+    return `<div class="rq-stats">${b('Vida', a.stats.maxHp, MAXS.hp, 'hp')}${b('Físico', a.stats.ad * a.stats.attackSpeed, MAXS.ad, 'ad')}${b('Magia', a.stats.ap, MAXS.ap, 'ap')}${b('Alcance', a.stats.range, MAXS.range, 'rg')}</div>`;
+  }
+  function synergyGain(a) {
+    const oc = G.orderCounts();
+    return a.orders.map(id => D.ORDERS[id]).filter(o => o.thresholds.includes(oc[o.id] + 1));
+  }
   function refreshShop() {
-    const r = G.run;
-    // ▲ só nos recrutamentos que realmente sobem uma sinergia; se quase tudo qualificar, mostra só os que passam do 1º nível
+    const me = G.me(), edit = G.canEdit();
+    document.querySelectorAll('#shop-tabs [data-shop]').forEach(b => b.classList.toggle('active', b.dataset.shop === UI.shopTab));
+    $('reroll-cost').textContent = `${G.rerollCost(me.id)}g`;
+    $('btn-reroll').disabled = !edit || me.gold < G.rerollCost(me.id) || UI.shopTab !== 'rec';
+    $('btn-reroll').style.visibility = UI.shopTab === 'rec' ? 'visible' : 'hidden';
+    $('quartel-hint').textContent = UI.shopTab === 'rec'
+      ? (G.isCoop() ? `Recrutas de ${me.name} • novos a cada sala • 🔒 trava para a próxima • arraste uma unidade aqui para vender` : 'Novos recrutas a cada sala • 🔒 trava uma carta para a próxima • arraste uma unidade aqui para vender')
+      : `Contrate qualquer arquétipo, sem traço, por ${Math.round((QT.contractMult - 1) * 100)}% a mais`;
+    const grid = $('shop-grid');
+    grid.className = 'shop-grid ' + (UI.shopTab === 'rec' ? 'quartel' : 'contracts');
+    if (UI.shopTab === 'con') {
+      grid.innerHTML = Object.values(D.ARCHETYPES).map(a => {
+        const cost = G.contractCost(a.id), ok = me.gold >= cost && edit, gain = synergyGain(a);
+        return `<div class="con-card ${ok ? '' : 'unaffordable'}" data-buy="${a.id}" style="--ac:${a.color}" ${tipAttr(archTip(a) + (gain.length ? `<br><br><b style="color:#facc15">Ativa:</b> ${gain.map(o => `${o.icon} ${o.name}`).join(', ')}` : ''))}>
+          ${gain.length ? '<span class="next-tier">▲</span>' : ''}<span class="con-sym">${a.symbol}</span><span class="con-name">${a.name}</span><span class="con-role">${a.role}</span><span class="con-cost">🪙 ${cost}</span></div>`;
+      }).join('');
+      return;
+    }
     const oc0 = G.orderCounts();
-    const ups = Object.values(D.ARCHETYPES).map(a => ({ id: a.id, best: Math.max(0, ...a.orders.map(id => { const o = D.ORDERS[id], i = o.thresholds.indexOf(oc0[id] + 1); return i + 1; })) }));
-    const strict = ups.filter(x => x.best > 0).length > 4;
-    const flagged = new Set(ups.filter(x => x.best > (strict ? 1 : 0)).map(x => x.id));
-    $('shop-grid').innerHTML = Object.values(D.ARCHETYPES).map(a => {
-      const cost = G.recruitCost(a.id);
-      const me = G.me(), room = G.boardOf(me.id).length < me.teamLimit;
-      const ok = me.gold >= cost && G.canEdit();
-      const oc = G.orderCounts();
-      const next = a.orders.map(id => D.ORDERS[id]).filter(o => o.thresholds.includes(oc[o.id] + 1));
-      const tip = archTip(a) + (next.length ? `<br><br><b style="color:#facc15">Recrutar e colocar em campo ativa:</b> ${next.map(o => `${o.icon} ${o.name} (${oc[o.id] + 1})`).join(', ')}` : '');
-      const mark = next.length && room && flagged.has(a.id);
-      return `<div class="shop-card ${ok ? '' : 'unaffordable'} ${mark ? 'completes' : ''}" data-buy="${a.id}" ${tipAttr(tip)}>
-        ${mark ? '<span class="next-tier">▲</span>' : ''}
-        <div class="shop-avatar" style="background:${a.color}28;border-color:${a.color};">${a.symbol}</div>
-        <div class="shop-name">${a.name}</div><div class="shop-role">${a.role}</div>
-        <div class="shop-orders">${a.orders.map(id => `<div style="color:${D.ORDERS[id].color}">${D.ORDERS[id].icon} ${D.ORDERS[id].name}</div>`).join('')}</div>
-        <div class="shop-cost">🪙 ${cost}g</div></div>`;
+    const tierOf = (a) => Math.max(0, ...a.orders.map(id => D.ORDERS[id].thresholds.indexOf(oc0[id] + 1) + 1));
+    const quals = me.offers.filter(Boolean).map(o => tierOf(D.ARCHETYPES[o.arch]));
+    const minTier = quals.filter(t => t > 0).length > 2 ? 2 : 1;
+    grid.innerHTML = me.offers.map((o, i) => {
+      if (!o) return `<div class="rq-card empty"><span>✔</span>Contratado<small>Volta na próxima sala</small></div>`;
+      const a = D.ARCHETYPES[o.arch], q = QT.quality[o.quality], t = o.trait ? D.TRAITS[o.trait] : null;
+      const ok = me.gold >= o.cost && edit, gain = tierOf(a) >= minTier ? synergyGain(a) : [];
+      const traitTxt = t ? `${t.icon} ${t.name}${o.el ? `: ${D.ELEMENTS[o.el].icon} ${D.ELEMENTS[o.el].name}` : ''}` : '';
+      const tip = `${archTip(a)}${t ? `<br><br><b>${t.icon} Traço — ${t.name}${t.rare ? ' (raro)' : ''}:</b> ${t.desc}${o.el ? ` (${D.ELEMENTS[o.el].name})` : ''}` : ''}${o.quality ? `<br><b style="color:${q.color}">${q.name}:</b> chega no Nível ${q.level} com ${q.level - 1} PE para gastar.` : ''}${gain.length ? `<br><br><b style="color:#facc15">Colocar em campo ativa:</b> ${gain.map(g => `${g.icon} ${g.name} (${G.orderCounts()[g.id] + 1})`).join(', ')}` : ''}`;
+      return `<div class="rq-card q${o.quality} ${ok ? '' : 'unaffordable'} ${o.locked ? 'locked' : ''}" data-hire="${i}" style="--ac:${a.color};--qc:${q.color}" ${tipAttr(tip)}>
+        <div class="rq-top"><span class="rq-quality">${q.name}</span><button class="rq-lock" data-lock="${i}" title="${o.locked ? 'Destravar' : 'Travar para a próxima sala'}">${o.locked ? '🔒' : '🔓'}</button></div>
+        <div class="rq-art"><span class="rq-sym">${a.symbol}</span>${q.level > 1 ? `<span class="rq-lvl">Nv.${q.level}</span>` : ''}${gain.length ? '<span class="rq-up" title="Completa uma sinergia">▲</span>' : ''}</div>
+        <div class="rq-name">${a.name}</div><div class="rq-role">${a.role}</div>
+        <div class="rq-orders">${a.orders.map(id => `<span style="color:${D.ORDERS[id].color}">${D.ORDERS[id].icon} ${D.ORDERS[id].name}</span>`).join('')}</div>
+        ${statBars(a)}
+        <div class="rq-trait ${t ? (t.rare ? 'rare' : '') : 'none'}">${t ? traitTxt : 'Sem traço'}</div>
+        <div class="rq-buy"><span>🪙 ${o.cost}g</span><em>Contratar</em></div></div>`;
     }).join('');
   }
 
@@ -365,6 +449,7 @@
       <div class="unit-header-card">
         <div class="unit-title-row"><h3>${a.symbol} ${esc(u.name)} ${mine ? '<button class="rename-btn" data-act="rename" title="Renomear">✏️</button>' : ''}</h3><span class="lvl-badge">Nível ${u.level}</span></div>
         ${!mine ? `<div class="info-box" style="padding:6px 8px;font-size:11px;border-color:${owner.color}">🔒 Unidade de <b style="color:${owner.color}">${esc(owner.name)}</b>. Pressione ${owner.id + 1} para jogar como ${esc(owner.name)}.</div>` : ''}
+        ${u.trait || u.quality ? `<div class="trait-line">${u.quality ? `<span class="q-badge q${u.quality}">${QT.quality[u.quality].name}</span>` : ''}${u.trait ? `<span class="el-chip trait-chip" ${tipAttr(D.TRAITS[u.trait].desc)}>${D.TRAITS[u.trait].icon} ${D.TRAITS[u.trait].name} — ${D.TRAITS[u.trait].desc}</span>` : ''}</div>` : ''}
         <div style="display:flex;gap:6px;flex-wrap:wrap;">${a.orders.map(id => `<span class="el-chip" style="color:${D.ORDERS[id].color}" ${tipAttr(`<b>${D.ORDERS[id].icon} ${D.ORDERS[id].name}</b> (${D.ORDERS[id].kind})<br>${D.ORDERS[id].tiersText}`)}>${D.ORDERS[id].icon} ${D.ORDERS[id].name}</span>`).join('')}<span class="el-chip" style="color:${a.color}">${a.role}</span></div>
         <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-secondary);"><span>Experiência</span><span>${u.xp} / ${next} (${pct}%)</span></div>
         <div class="progress-track"><div class="progress-fill-xp" style="width:${pct}%"></div></div>
@@ -392,6 +477,7 @@
       <div class="unit-header-card enemy">
         <div class="unit-title-row"><h3>${e.symbol} ${esc(e.name)}</h3><span class="lvl-badge">Nível ${e.level}</span></div>
         <div style="font-size:11px;color:var(--text-secondary);">Arquétipo base: ${arch.symbol} ${arch.name} (${arch.role})</div>
+        ${e.ambush ? '<span class="el-chip" style="color:#fb7185">🦅 Salta para a sua retaguarda no início</span>' : ''}
         ${(e.affixes || []).map(af => `<span class="el-chip" style="color:${D.ELITE_AFFIXES[af].color}">${D.ELITE_AFFIXES[af].icon} ${D.ELITE_AFFIXES[af].name}: ${D.ELITE_AFFIXES[af].desc}</span>`).join('')}
       </div>
       ${boss ? `<div class="info-box"><h4>👑 Mecânica</h4>${boss.mechanic}</div>` : ''}
@@ -628,7 +714,7 @@
           ${rw.mult > 1 ? `<div class="rc-note">🔥 inclui +${Math.round((rw.mult - 1) * 100)}% pela Ameaça</div>` : ''}<div class="rc-note">Juros: 10% do ouro guardado (máx. ${C.INTEREST_CAP}g).</div></div></div>`;
       }
       if (rw.won) {
-        cards += `<div class="rcard items"><div class="rc-ic">🎁</div><div class="rc-body"><h4>Itens</h4>${rw.items.length ? rw.items.map(it => `<div class="rc-line">${pname(it.pid)}<span class="item-pill t${it.item.tier}">${D.ITEMS[it.item.id].icon} ${D.ITEMS[it.item.id].name} ${'★'.repeat(it.item.tier)}</span><small>${it.label} • foi para a mochila</small></div>`).join('') : '<div class="rc-line muted">Nenhum item desta vez <small>(${Math.round(C.NORMAL_ITEM_DROP * 100)}% de chance em combates comuns)</small>.</div>'}</div></div>`;
+        cards += `<div class="rcard items"><div class="rc-ic">🎁</div><div class="rc-body"><h4>Itens</h4>${rw.items.length ? rw.items.map(it => `<div class="rc-line">${pname(it.pid)}<span class="item-pill t${it.item.tier}">${D.ITEMS[it.item.id].icon} ${D.ITEMS[it.item.id].name} ${'★'.repeat(it.item.tier)}</span><small>${it.label} • foi para a mochila</small></div>`).join('') : `<div class="rc-line muted">Nenhum item desta vez <small>(${Math.round(C.NORMAL_ITEM_DROP * 100)}% de chance em combates comuns)</small></div>`}</div></div>`;
         if (rw.relic) cards += `<div class="rcard relic"><div class="rc-ic">🏺</div><div class="rc-body"><h4>Relíquia</h4><div class="rc-line">Você escolherá <b>1 de 3 relíquias</b> ${rw.relic === 'boss' ? '(maior chance de rara/lendária)' : ''} na próxima tela.</div></div></div>`;
       }
       const xpRows = (rw.units || []).map((u, i) => {
@@ -642,6 +728,10 @@
       cards += `<div class="rcard xp wide"><div class="rc-ic">📘</div><div class="rc-body"><h4>Experiência</h4>
         <div class="rc-note">${rw.xp.filter(x => x.n).map(x => `${pname(x.pid)}${x.each} XP para cada uma de ${x.n} unidade(s)`).join(' • ')} ${rw.won ? `• +${rw.killXp} XP por abate` : '• 45% do XP (treino)'}</div>${xpRows}
         ${(rw.units || []).some(u => u.lvlAfter > u.lvlBefore) ? '<div class="rc-note">⭐ Cada nível dá 1 Ponto de Evolução — use em <b>Evoluir</b> antes da próxima luta.</div>' : ''}</div></div>`;
+      if (rw.objective) {
+        const ob = rw.objective;
+        cards += `<div class="rcard objective ${ob.done ? 'done' : 'miss'}"><div class="rc-ic">${D.OBJECTIVES[ob.id].icon}</div><div class="rc-body"><h4>Objetivo bônus</h4><div class="rc-line"><b class="big">${ob.done ? '✔ Cumprido' : '✖ Não cumprido'}</b></div><div class="rc-note">${ob.text} • ${ob.done ? `ganhou ${ob.reward}` : `valia ${ob.reward}`}</div></div></div>`;
+      }
       if (rw.threat) {
         const t = rw.threat, d = t.after - t.before;
         cards += `<div class="rcard threat"><div class="rc-ic">🔥</div><div class="rc-body"><h4>Ameaça</h4><div class="rc-line"><b class="big">${t.before} → ${t.after}</b> <small>${t.why}${d ? ` (${d > 0 ? '+' : ''}${d})` : ''}</small></div>
@@ -809,7 +899,7 @@
   UI.openCodex = function (tab, onBack) {
     if (tab) UI.codexTab = tab;
     if (onBack !== undefined) UI.codexBack = onBack;
-    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
+    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['dou', '🧠 Doutrinas'], ['qua', '🏰 Quartel & Táticas'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
     let content = '';
     const t = UI.codexTab;
     if (t === 'guia') content = `<div class="codex-prose">
@@ -820,13 +910,14 @@
       <li>Sinergias, relíquias e Cidadela são <b>compartilhadas</b>. Escolhas de recompensa se revezam entre os jogadores; no Mercador cada um compra com o próprio ouro. Dá para doar ouro e itens (🎁).</li>
       <li>O combate só começa quando <b>todos marcam Pronto</b> (<code>Espaço</code>). Os inimigos ficam mais numerosos e fortes para compensar o time maior.</li></ul>
       <h3>O coração da estratégia: XP compartilhado</h3><p>Cada sala gera um <b>pool de XP dividido apenas entre as unidades em campo</b>. Poucas unidades sobem de nível muito rápido (hyper-carry); muitas unidades ativam mais sinergias, mas crescem devagar. O controle <b>Comp 1–16</b> no topo define o limite do campo. O banco não divide XP.</p>
+      <h3>Estratégia: leia o inimigo</h3><p>Antes de cada luta o painel acima do tabuleiro mostra a <b>doutrina</b> da horda (e sua fraqueza), a <b>inteligência inimiga</b> — contramedidas que eles prepararam contra o seu estilo, a partir do Ato II — e um <b>objetivo bônus</b>. Responda trocando unidades do banco, reposicionando e escolhendo uma <b>Tática</b>. Detalhes nas abas 🧠 Doutrinas e 🏰 Quartel &amp; Táticas.</p>
       <h3>Evolução</h3><p>Cada nível concede 1 PE. Gaste-o para desbloquear/aprimorar uma das 4 habilidades do arquétipo (até Nv.3) <i>ou</i> para absorver 1 stack de elemento.</p>
-      <h3>Sinergias</h3><ul><li><b>Elementos</b> (2/4/6/8 stacks somados no campo): Fogo, Água, Pedra, Ar, Solar, Lunar.</li><li><b>Classes</b> (2/4/6): Bastião, Lâmina, Arcano, Devoção e Invocador.</li><li><b>Origens</b> (2/3/4): Selvagem, Oculto, Celestial e Engenho.</li><li>Cada arquétipo tem 1 Classe + 1 Origem. Na loja, ▲ indica que recrutar aquela unidade ativa um novo nível.</li></ul>
+      <h3>Sinergias</h3><ul><li><b>Elementos</b> (2/4/6/8 stacks somados no campo): Fogo, Água, Pedra, Ar, Solar, Lunar.</li><li><b>Classes</b> (2/4/6): Bastião, Lâmina, Arcano, Devoção e Invocador.</li><li><b>Origens</b> (2/3/4): Selvagem, Oculto, Celestial e Engenho.</li><li>Cada arquétipo tem 1 Classe + 1 Origem. No Quartel, ▲ indica que aquele recruta ativa um novo nível.</li></ul>
       <h3>Terreno</h3><p>O tabuleiro é 12×12 e muda a cada sala: montanhas, lagos, rios com pontes, ravinas, florestas (esquiva), colinas (alcance), pântanos (lentidão) e lava (dano). Posicione-se pensando nos gargalos.</p>
       <h3>Conquistas</h3><p>${FE.Achievements.list.length} conquistas permanentes em 6 categorias (botão 🏆), algumas secretas. Cada uma rende Fragmentos Astrais e sobe o seu título de comandante.</p>
       <h3>Desafio Diário</h3><p>Todo dia uma seed nova, igual para todos, na Ascensão I. Seu melhor resultado do dia fica registrado na tela inicial.</p>
       <h3>Mapa</h3><p>Cada Ato tem um mapa ramificado. Combates e Elites dão XP; Forja, Santuário, Acampamento, Mercador e Mistério dão recursos sem lutar. Elites e Chefes garantem relíquias.</p>
-      <h3>Controles</h3><ul><li>Arraste unidades entre banco e campo, ou dentro do campo para trocar posições. Arraste até a loja para vender.</li><li>Clique em inimigos durante a preparação para estudá-los.</li><li>Itens: selecione uma unidade e clique no item da mochila. Dois itens iguais do mesmo tier podem ser fundidos (★→★★→★★★).</li><li>Clique no ✏️ do Inspetor para dar nome às suas unidades.</li><li>Atalhos: <code>Espaço</code> iniciar/pronto • <code>P</code> pausar • <code>S</code> velocidade • <code>A</code> auto-posicionar • <code>E</code> evoluir • <code>M</code> mapa • <code>C</code> códice • <code>1–4</code> jogador • <code>Esc</code> fechar.</li></ul></div>`;
+      <h3>Controles</h3><ul><li>Arraste unidades entre banco e campo, ou dentro do campo para trocar posições. Arraste até o Quartel para vender.</li><li>Clique em inimigos durante a preparação para estudá-los.</li><li>Itens: selecione uma unidade e clique no item da mochila. Dois itens iguais do mesmo tier podem ser fundidos (★→★★→★★★).</li><li>Clique no ✏️ do Inspetor para dar nome às suas unidades.</li><li>Atalhos: <code>Espaço</code> iniciar/pronto • <code>P</code> pausar • <code>S</code> velocidade • <code>A</code> auto-posicionar • <code>E</code> evoluir • <code>M</code> mapa • <code>C</code> códice • <code>1–4</code> jogador • <code>Esc</code> fechar.</li></ul></div>`;
     if (t === 'arq') content = `<div class="codex-grid">${Object.values(D.ARCHETYPES).map(a => `<div class="codex-card"><h4><span>${a.symbol} ${a.name}</span><span class="gold-text">${a.cost}g</span></h4>
       <div>${a.role} • ${ordersLine(a)}</div>
       <div>❤️ ${a.stats.maxHp} • ⚔️ ${a.stats.ad} • 🔮 ${a.stats.ap} • 🛡️ ${a.stats.armor} • ⚡ ${a.stats.attackSpeed} • 🎯 ${a.stats.range}</div>
@@ -841,6 +932,16 @@
     if (t === 'ini') content = `<div class="codex-grid">${[1, 2, 3, 4].map(a => `<div class="codex-card"><h4>${D.ACTS[a].short} — ${D.ACTS[a].name}</h4><div style="font-size:16px;letter-spacing:3px;">${Object.values(D.ACTS[a].faction).map(f => `<span title="${f[0]}">${f[1]}</span>`).join(' ')}</div><div><b>${D.BOSSES[a].symbol} ${D.BOSSES[a].name}:</b> ${D.BOSSES[a].mechanic}</div></div>`).join('')}
       ${Object.values(D.ELITE_AFFIXES).map(f => `<div class="codex-card"><h4 style="color:${f.color}">${f.icon} Afixo de Elite: ${f.name}</h4><div>${f.desc}</div></div>`).join('')}
       <div class="codex-card"><h4>⛈️ Tempestade da Forja</h4><div>Após 50s de combate, todas as unidades sofrem dano crescente — impede impasses.</div></div></div>`;
+    if (t === 'dou') content = `<div class="codex-prose" style="margin-bottom:12px;"><p>Cada horda comum ou de elite segue uma <b>doutrina</b> — um plano de batalha visível no painel acima do tabuleiro antes da luta. A escala de poder mantém a força total justa; a doutrina muda <i>como</i> o inimigo luta. A resposta certa é composição, posicionamento e tática.</p>
+      <p>A partir do <b>Ato II</b>, a horda também usa <b>inteligência</b>: ao você entrar na sala ela analisa as melhores unidades do seu elenco (campo + banco) e prepara <b>contramedidas</b> contra o seu ponto mais previsível (1 no Ato II, até 2 nos Atos III–IV). Você vê o que eles prepararam e ainda pode trocar unidades, posição e tática antes de lutar.</p></div>
+      <div class="codex-grid">${Object.values(D.DOCTRINES).map(d => `<div class="codex-card" style="border-color:${d.color}66"><h4><span>${d.icon} ${d.name}</span><span class="kind-tag">doutrina • sala ${d.minRoom}+</span></h4><div>${d.desc}</div><div class="muted"><b>Fraqueza:</b> ${d.weak}</div></div>`).join('')}
+      ${Object.values(D.COUNTERS).map(c => `<div class="codex-card" style="border-color:${c.color}66"><h4><span>${c.icon} ${c.name}</span><span class="kind-tag">contramedida</span></h4><div>${c.desc}</div><div class="muted"><b>Resposta:</b> ${c.answer}</div></div>`).join('')}</div>`;
+    if (t === 'qua') content = `<div class="codex-prose" style="margin-bottom:12px;"><h3>Quartel</h3><p>A cada sala o Quartel oferece <b>${D.QUARTEL.slots} recrutas</b> (sempre pelo menos um de linha de frente e um de retaguarda). Cada um tem <b>qualidade</b> — ${D.QUARTEL.quality.map(q => `<b style="color:${q.color}">${q.name}</b> (Nv.${q.level}, preço ×${q.costMult})`).join(', ')} — e pode ter um <b>traço</b>. Heróis aparecem mais nos Atos finais e sempre têm um traço raro. Parte das ofertas puxa arquétipos que completam as Ordens que você já tem.</p>
+      <p><b>🎲 Rolar</b> troca as cartas não travadas (${D.QUARTEL.rerollBase}g, +${D.QUARTEL.rerollStep}g a cada rolagem na mesma sala). <b>🔒 Travar</b> guarda uma carta para a próxima sala. <b>📜 Contratos</b> contratam qualquer arquétipo sem traço por ${Math.round((D.QUARTEL.contractMult - 1) * 100)}% a mais — o caminho garantido, porém caro.</p>
+      <h3>Táticas</h3><p>Antes de cada luta escolha a postura do exército na barra acima do tabuleiro. Ela vale até você trocar.</p></div>
+      <div class="codex-grid">${Object.values(D.TACTICS).map(x => `<div class="codex-card"><h4>${x.icon} ${x.name}</h4><div>${x.desc}</div></div>`).join('')}
+      ${Object.values(D.TRAITS).map(x => `<div class="codex-card" ${x.rare ? 'style="border-color:#fbbf2466"' : ''}><h4><span>${x.icon} ${x.name}</span><span class="kind-tag">${x.rare ? 'traço raro' : 'traço'}</span></h4><div>${x.desc}</div></div>`).join('')}
+      ${Object.values(D.OBJECTIVES).map(x => `<div class="codex-card"><h4><span>${x.icon} ${x.name}</span><span class="kind-tag">objetivo</span></h4><div>${x.text('N')}</div></div>`).join('')}</div>`;
     if (t === 'rw') content = `<div class="codex-prose">
       <h3>De onde vem o poder do seu exército</h3>
       <ul><li><b>🪙 Ouro</b> — cada vitória paga uma recompensa base (cresce com a sala; elite +30, chefe +60) mais <b>juros de 10%</b> do ouro guardado (máx. ${C.INTEREST_CAP}g). Use para comprar unidades, rolar a loja e subir o limite do time. Em co-op, cada jogador recebe a sua parte.</li>
@@ -858,7 +959,14 @@
       <p>Poder de uma unidade = √(vida efetiva × dano por segundo), contando armadura, resistência mágica, itens, relíquias, sinergias e nível. O poder do time é o <b>quadrado da soma</b> (lei de Lanchester): 6 unidades médias valem bem mais que 3 fortes. A barra <b>Seu exército × Horda</b> compara os dois e indica se a luta está Fácil, Equilibrada, Difícil ou Mortal para o momento da campanha.</p>
       <p>Nas escalas adaptativas o jogo mede a força do seu <b>elenco inteiro</b> (inclusive o banco) ao entrar na sala — então guardar unidades fortes no banco não engana o sistema, e espalhar XP entre mais unidades não é punido. A correção é suave (raiz quadrada, limitada entre ×${D.SCALING.kMin} e ×${D.SCALING.kMax}), para que boas decisões ainda sejam recompensadas.</p></div>`;
     if (t === 'notas') content = `<div class="codex-prose">
-      <h3>v2.3 — novidades</h3>
+      <h3>v3.0 — Mesa de Guerra</h3>
+      <ul><li><b>Doutrinas inimigas</b>: 7 planos de batalha (Muralha de Escudos, Emboscada, Artilharia, Enxame, Sacerdócio, Ritual Arcano, Horda Furiosa) que mudam composição, formação e atributos da horda.</li>
+      <li><b>Inteligência inimiga</b> a partir do Ato II: 7 contramedidas contra o seu estilo (dano físico ou mágico demais, um campeão carregando o time, muitos atiradores, dependência de cura, exército grande, armadura alta).</li>
+      <li><b>Táticas</b>: Equilíbrio, Assalto, Falange, Caça à Retaguarda e Fogo Concentrado.</li>
+      <li><b>Objetivos bônus</b> em cada luta, com ouro, XP ou item.</li>
+      <li><b>Quartel</b>: recrutas rotativos com qualidade (Recruta/Veterano/Herói) e 16 traços, rolagem, trava e Contratos.</li>
+      <li><b>Novo layout</b>: trilha de campanha, painel de inteligência, doca de Comando + Quartel, tema visual novo.</li></ul>
+      <h3>v2.3</h3>
       <ul><li><b>4 escalas de poder</b> para os inimigos: Clássica, Nivelada, Proporcional e <b>Dinâmica</b> (com Medidor de Ameaça que endurece os inimigos — e aumenta as recompensas — quando você domina).</li>
       <li><b>Barra de poder</b> Seu exército × Horda com dificuldade estimada antes de cada luta.</li>
       <li><b>Recompensas claras</b>: faixa “Se vencer / Se perder”, recompensas no mapa, relatório em cartões com a conta do ouro, barras de XP animadas por unidade e subidas de nível.</li>
@@ -961,7 +1069,11 @@
   /* ======================= REFRESH ======================= */
   UI.refresh = function () {
     const r = G.run;
-    if (r && r.phase !== UI.lastPhase) { if (r.phase === 'MAP') UI.mapDismissed = false; UI.lastPhase = r.phase; }
+    if (r && r.phase !== UI.lastPhase) {
+      if (r.phase === 'MAP') UI.mapDismissed = false;
+      if (r.phase === 'COMBAT') requestAnimationFrame(() => { const cv = $('canvas-container'); const bx = cv.getBoundingClientRect(); if (bx.bottom > innerHeight || bx.top < 80) window.scrollBy({ top: bx.top - 96, behavior: 'smooth' }); });
+      UI.lastPhase = r.phase;
+    }
     if (!r) UI.lastPhase = null;
     R.invalidate();
     refreshHeader();
@@ -1068,7 +1180,22 @@
       else if (G.selectedId && G.onBoard(G.selectedId)) G.toBench(G.selectedId, +s.dataset.slot);
     });
     $('bench-grid').addEventListener('dblclick', (e) => { const s = e.target.closest('.bench-slot'); if (s && s.dataset.unit) G.toggle(+s.dataset.unit); });
-    $('shop-grid').addEventListener('click', (e) => { const c = e.target.closest('[data-buy]'); if (c) G.buy(c.dataset.buy); });
+    $('shop-grid').addEventListener('click', (e) => {
+      const l = e.target.closest('[data-lock]'); if (l) { e.stopPropagation(); return G.toggleLock(+l.dataset.lock); }
+      const h = e.target.closest('[data-hire]'); if (h) return G.hire(+h.dataset.hire);
+      const c = e.target.closest('[data-buy]'); if (c) G.buy(c.dataset.buy);
+    });
+    $('shop-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-shop]'); if (b) { UI.shopTab = b.dataset.shop; refreshShop(); } });
+    $('btn-reroll').addEventListener('click', () => G.reroll());
+    $('tactic-bar').addEventListener('click', (e) => { const b = e.target.closest('[data-tactic]'); if (b) G.setTactic(b.dataset.tactic); });
+    $('left-tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-left]'); if (!b) return;
+      UI.leftTab = b.dataset.left;
+      document.querySelectorAll('#left-tabs .seg').forEach(x => x.classList.toggle('active', x === b));
+      $('synergy-list').style.display = UI.leftTab === 'syn' ? '' : 'none';
+      $('combat-log').style.display = UI.leftTab === 'log' ? '' : 'none';
+      if (UI.leftTab === 'log') $('combat-log').scrollTop = $('combat-log').scrollHeight;
+    });
     $('bag-grid').addEventListener('click', (e) => {
       const gv = e.target.closest('[data-give]'); if (gv) { e.stopPropagation(); UI.openGive(+gv.dataset.give); return; }
       const f = e.target.closest('[data-fuse]'); if (f) { e.stopPropagation(); G.fuse(+f.dataset.fuse); return; }
@@ -1094,7 +1221,7 @@
     $('btn-pause').addEventListener('click', () => G.togglePause());
     $('players-bar').addEventListener('click', (e) => { const b = e.target.closest('[data-player]'); if (b) G.setActive(+b.dataset.player); });
     $('give-gold').addEventListener('click', () => UI.openGive());
-    document.querySelector('.brand-icon').addEventListener('click', () => UI.anvilClick());
+    document.querySelector('.brand-mark').addEventListener('click', () => UI.anvilClick());
     $('overlay-map-btn').addEventListener('click', () => UI.showMap());
     $('btn-speed').addEventListener('click', () => UI.cycleSpeed());
     $('btn-arrange').addEventListener('click', () => G.autoArrange());

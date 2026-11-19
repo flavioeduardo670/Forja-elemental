@@ -28,6 +28,32 @@
     return 0;
   }
 
+  /* Modificadores genéricos (traços, táticas, doutrinas e contramedidas) */
+  function applyMods(s, m) {
+    if (!m) return;
+    if (m.hpMult) s.maxHp *= m.hpMult;
+    if (m.adMult) s.ad *= m.adMult;
+    if (m.apMult) s.ap *= m.apMult;
+    if (m.armorMult) s.armor *= m.armorMult;
+    if (m.armorAdd) s.armor += m.armorAdd;
+    if (m.asMult) s.attackSpeed *= m.asMult;
+    if (m.healMult) s.healPowerMult *= m.healMult;
+    if (m.startMana) s.startMana += m.startMana;
+    if (m.manaRegenMult) s.manaRegen *= m.manaRegenMult;
+    if (m.lifesteal) s.lifesteal += m.lifesteal;
+    if (m.dmgMult) s.dmgDealtMult *= m.dmgMult;
+    if (m.magicReduce) s.magicReduce = Math.min(0.6, s.magicReduce + m.magicReduce);
+    if (m.armorPen) s.armorPen += m.armorPen;
+    if (m.chain) s.chainTargets = Math.max(s.chainTargets, m.chain);
+    if (m.crit) s.critChance += m.crit;
+    if (m.dodge) s.dodge += m.dodge;
+    if (m.shieldPct) s.initialShieldPct += m.shieldPct;
+    if (m.dmgReduce) s.dmgReduction += m.dmgReduce;
+    if (m.execute) s.executeBonus += m.execute;
+    if (m.highHp) s.highHpBonus += m.highHp;
+    if (m.inspire) s.inspireAura += m.inspire;
+  }
+
   function computeStats(unit, ctx) {
     const arch = D.ARCHETYPES[unit.archetypeId];
     const b = unit.baseStats || arch.stats;
@@ -39,7 +65,7 @@
       dodge: 0, lifesteal: 0, thorns: 0, executeBonus: 0, highHpBonus: 0, healPowerMult: 1, initialShield: 0,
       trueDmgBonus: 0, dmgReduction: 0, magicPen: 0, armorPen: 0, manaRefund: 0, dmgDealtMult: 1, regenPct: 0,
       auraHeal: 0, burnPct: 0, explodePct: 0, chillAmt: 0, chainTargets: 0, solarAuraReduce: 0, xpMult: 0, initialShieldPct: 0,
-      guardAura: 0, inspireAura: 0, summonMult: 0, summonHp: 0
+      guardAura: 0, inspireAura: 0, summonMult: 0, summonHp: 0, magicReduce: 0
     };
 
     // 1. Stacks elementais individuais
@@ -82,6 +108,9 @@
     if (k.bd_inspirar) s.inspireAura += k.bd_inspirar * 0.06;
     if (k.bd_ritmo) { s.startMana += k.bd_ritmo * 12; s.manaRegen += k.bd_ritmo * 3; }
     if (k.ne_pacto) { s.lifesteal += k.ne_pacto * 0.10; s.summonHp += k.ne_pacto * 0.20; }
+
+    // 2b. Traço do recruta (Quartel)
+    if (!ctx.isEnemy && unit.trait && D.TRAITS[unit.trait]) applyMods(s, D.TRAITS[unit.trait].mods);
 
     // 3. Itens (com tier ★1–★3)
     const items = unit.items || [];
@@ -158,6 +187,7 @@
       if (has('presa_vampira')) s.lifesteal += 0.10;
       if (has('pato_borracha')) s.critChance += 0.06;
       if (has('pintinho_dourado')) { s.attackSpeed *= 1.08; s.maxHp *= 1.08; }
+      if (ctx.tactic && D.TACTICS[ctx.tactic]) applyMods(s, D.TACTICS[ctx.tactic].mods);
     } else {
       // 6b. Inimigos: afixos de elite e ascensão
       for (const af of unit.affixes || []) {
@@ -168,6 +198,7 @@
       }
       const asc = ctx.ascension || 0;
       if (asc > 0) { const m = 1 + asc * 0.06; s.maxHp *= m; s.ad *= m; s.ap *= m; }
+      applyMods(s, unit.mods); applyMods(s, unit.cmods);
     }
 
     // 7. Arena
@@ -370,7 +401,9 @@
 
   /* Escala do co-op: o time tem sempre até 12 unidades, não importa se 2, 3 ou 4 jogadores */
   const CO = { count: 1.3, countPer: 0.05, stat: 1.05, statPer: 0.13, boss: 1.3, bossPer: 0.14 };
-  function generateHorde(rng, room, act, roomType, asc, terrain, players = 1) {
+  function generateHorde(rng, room, act, roomType, asc, terrain, players = 1, doctrineId = null) {
+    const doc = doctrineId && roomType !== 'chefe' ? D.DOCTRINES[doctrineId] : null;
+    const dmods = doc ? { ...doc.mods } : null;
     const enemies = [];
     const archKeys = Object.keys(D.ARCHETYPES);
     const elKeys = Object.keys(D.ELEMENTS);
@@ -379,7 +412,8 @@
     // Co-op: mais inimigos e um pouco mais fortes (o time pode ter até 12 unidades)
     const coop = players > 1, coopCount = coop ? CO.count + CO.countPer * room : 1, coopStat = coop ? CO.stat + CO.statPer * room : 1;
     const baseCount = isBoss ? 2 + Math.floor(room * 0.26) : 2 + Math.floor(room * 0.55) + (isElite ? 1 : 0);
-    const count = Math.min(isBoss ? 12 : 22, Math.round(baseCount * coopCount));
+    const docCount = doc && doc.countMult ? (coop ? 1 + (doc.countMult - 1) * 0.5 : doc.countMult) : 1;
+    const count = Math.min(isBoss ? 12 : 26, Math.round(baseCount * coopCount * docCount));
     const scale = (1 + (room - 1) * 0.135 + (isElite ? 0.15 : 0)) * coopStat;
 
     const cols = [...Array(C.COLS).keys()];
@@ -406,18 +440,24 @@
       enemies.push({
         id: `elite_${room}`, name: `Comandante ${D.ELEMENTS[el1].name}`, archetypeId: archId, symbol: '👹', color: '#f59e0b',
         isBoss: false, isElite: true, level: Math.max(2, Math.floor(room * 0.85)), col: lead.col, row: lead.row,
-        elements: { [el1]: 2 }, skills: { [D.ARCHETYPES[archId].signatureSkill]: 2, [D.ARCHETYPES[archId].skills[1]]: 1 }, affixes: affs,
+        elements: { [el1]: 2 }, skills: { [D.ARCHETYPES[archId].signatureSkill]: 2, [D.ARCHETYPES[archId].skills[1]]: 1 }, affixes: affs, mods: dmods && !doc.countMult ? { ...dmods } : null, leader: true,
         baseStats: { ...makeEnemyStats(D.ARCHETYPES[archId], scale, 1.0), maxHp: Math.round(740 * scale * 1.95), ad: Math.round(64 * scale * 1.3), armor: Math.round(28 + room * 2.5), range: Math.max(1.5, D.ARCHETYPES[archId].stats.range) }
       });
     }
 
-    let si = 0;
+    let si = 0, bi = slots.length - 1;
     const frontPool = ['vanguarda', 'berserker', 'lanceiro', 'paladino', 'monge'];
+    const pool = doc && doc.pool ? doc.pool : archKeys;
+    const nFront = doc && doc.front ? Math.min(count, Math.max(doc.front.length, Math.round(count * 0.34))) : 0;
+    const ambushN = doc && doc.ambush ? Math.round(count * doc.ambush * (coop ? 0.6 : 1)) : 0;
     for (let i = 0; i < count; i++) {
-      while (si < slots.length && reserved(slots[si])) si++;
-      if (si >= slots.length) break;
-      const pos = slots[si++];
-      const archKey = pos.row >= C.PLAYER_ROW - 2 && i < Math.ceil(count / 2) ? rng.pick(frontPool) : rng.pick(archKeys);
+      let archKey, pos;
+      if (doc && doc.front && i < nFront) archKey = doc.front[i % doc.front.length];
+      else if (doc && doc.front) archKey = rng.pick(pool);
+      const deep = doc && doc.formation === 'back' && i >= nFront;
+      if (deep) { while (bi >= si && reserved(slots[bi])) bi--; if (bi < si) break; pos = slots[bi--]; }
+      else { while (si <= bi && reserved(slots[si])) si++; if (si > bi) break; pos = slots[si++]; }
+      if (!archKey) archKey = pos.row >= C.PLAYER_ROW - 2 && i < Math.ceil(count / 2) ? rng.pick(doc && doc.pool ? pool : frontPool) : rng.pick(pool);
       const arch = D.ARCHETYPES[archKey];
       const els = {};
       if (room >= 2 && rng.chance(0.5)) els[rng.pick(elKeys)] = 1;
@@ -428,7 +468,8 @@
       enemies.push({
         id: `e_${room}_${i}`, name: fname, archetypeId: archKey, symbol: fsym, color: fac.enemyColor,
         isBoss: false, isElite: false, level: Math.max(1, Math.floor(1 + (room - 1) * 0.42)), col: pos.col, row: pos.row,
-        elements: els, skills, affixes: [],
+        elements: els, skills, affixes: [], mods: dmods ? { ...dmods } : null,
+        ambush: i >= count - ambushN && archKey !== 'sombra',
         baseStats: { ...makeEnemyStats(arch, scale), armor: Math.round(arch.stats.armor * (1 + (room - 1) * 0.05)) }
       });
     }
@@ -467,11 +508,14 @@
     const c = {
       units: [], time: 0, rng: FE.RNG(opts.seed || 1), relics: opts.relics || new Set(), affix: opts.affix,
       phoenixUsed: false, over: false, result: null, overtimeAnnounced: false, fxOn: opts.fx !== false,
-      terrain: opts.terrain || '.'.repeat(C.COLS * C.ROWS), maxPlayerSummons: 0,
+      terrain: opts.terrain || '.'.repeat(C.COLS * C.ROWS), maxPlayerSummons: 0, antiHeal: opts.antiHeal || 0, tactic: opts.tactic || 'equilibrio',
+      leaderDeathAt: null,
       fx: { projectiles: [], particles: [], texts: [], shockwaves: [], beams: [], slashes: [], ghosts: [], shake: 0 }
     };
     for (const p of opts.players) c.units.push(makeCombatant(p.unit, 'player', p.stats));
-    for (const e of opts.enemies) c.units.push(makeCombatant(e.unit, 'enemy', e.stats));
+    const tgtMode = (D.TACTICS[c.tactic] || {}).target || null;
+    for (const u of c.units) if (u.team === 'player') u.tactic = tgtMode;
+    for (const e of opts.enemies) c.units.push(makeCombatant(e.unit, 'enemy', e.stats, { ambush: !!e.unit.ambush, huntId: opts.huntId || null, isLeader: !!(e.unit.leader || e.unit.isBoss) }));
 
     const has = (id) => c.relics.has(id);
     for (const u of c.units) {
@@ -483,7 +527,7 @@
     }
     // Sombra: salto para a retaguarda adversária
     for (const u of c.units) {
-      if (u.archetypeId !== 'sombra' || u.isBoss || u.isElite) continue;
+      if ((u.archetypeId !== 'sombra' && !u.ambush) || u.isBoss || u.isElite) continue;
       const row = u.team === 'player' ? 0 : C.ROWS - 1;
       const col = nearestFreeCol(c, row, Math.floor(u.x), u.uid);
       if (col !== -1) { particles(c, u.x, u.y, '#f43f5e', 10); u.x = col + 0.5; u.y = row + 0.5; particles(c, u.x, u.y, '#f43f5e', 14); }
@@ -589,7 +633,7 @@
     if (type === 'magic') armor *= 0.45 * (1 - (att ? att.stats.magicPen : 0));
     else if (type === 'physical') armor *= 1 - Math.min(0.9, (att ? att.stats.armorPen : 0) + (opts.armorPen || 0));
     else armor = 0;
-    dmg = dmg * (100 / (100 + Math.max(0, armor))) * (1 - tgt.stats.dmgReduction);
+    dmg = dmg * (100 / (100 + Math.max(0, armor))) * (1 - tgt.stats.dmgReduction) * (type === 'magic' ? 1 - (tgt.stats.magicReduce || 0) : 1);
     const trueD = att && type !== 'true' && att.stats.trueDmgBonus > 0 ? raw * att.stats.trueDmgBonus : 0;
     const final = Math.max(3, Math.round(dmg + trueD));
 
@@ -615,7 +659,7 @@
 
   function heal(c, src, tgt, raw) {
     if (!tgt || tgt.dead) return 0;
-    const amt = Math.round(raw * (src ? src.stats.healPowerMult : 1));
+    const amt = Math.round(raw * (src ? src.stats.healPowerMult : 1) * (tgt.team === 'player' && c.antiHeal ? 1 - c.antiHeal : 1));
     const healed = Math.min(tgt.stats.maxHp - tgt.hp, amt);
     if (healed > 0) {
       tgt.hp += healed;
@@ -634,6 +678,7 @@
   }
 
   function handleDeath(c, killer, v) {
+    if (v.team === 'enemy' && v.isLeader && c.leaderDeathAt === null && !(v.hp > 0)) c.leaderDeathAt = c.time;
     if (v.team === 'player' && !v.isSummon && c.relics.has('fenix_cinzas') && !c.phoenixUsed) {
       c.phoenixUsed = true;
       v.hp = Math.round(v.stats.maxHp * 0.45);
@@ -957,8 +1002,18 @@
     }
   };
 
+  const BACKLINE = new Set(['clerigo', 'druida', 'bardo', 'cacador', 'arcanista', 'alquimista', 'artifice', 'necromante']);
   function chooseTarget(u, opps) {
     let best = null, bd = Infinity;
+    if (u.huntId && !u.isSummon) { const h = opps.find(o => o.rosterId === u.huntId); if (h) return h; }
+    if (u.tactic === 'back' && !u.isSummon) {
+      for (const o of opps) { if (o.isSummon || !BACKLINE.has(o.archetypeId)) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < bd) { bd = d; best = o; } }
+      if (best) return best;
+    } else if (u.tactic === 'low' && !u.isSummon) {
+      for (const o of opps) { if (Math.hypot(o.x - u.x, o.y - u.y) > u.stats.range + 3) continue; if (o.hp < bd) { bd = o.hp; best = o; } }
+      if (best) return best;
+    }
+    bd = Infinity;
     if (u.archetypeId === 'sombra' && !u.isSummon) {
       for (const o of opps) { if (o.hp < bd) { bd = o.hp; best = o; } }
       return best;
@@ -981,7 +1036,7 @@
     const enemies = alive(c, 'enemy');
     if (!players.length || !enemies.length) {
       c.over = true;
-      c.result = { won: players.length > 0, survivors: enemies.filter(e => !e.isSummon).length, time: c.time };
+      c.result = { won: players.length > 0, survivors: enemies.filter(e => !e.isSummon).length, time: c.time, leaderAt: c.leaderDeathAt };
       return;
     }
 
@@ -1125,6 +1180,7 @@
   }
 
   FE.Engine = {
+    applyMods,
     unitPower, teamPower,
     computeStats, synergyTier, orderTier, generateActMap, generateHorde, rollAffix,
     generateTerrain, terrainAt, tileBlocked, nearestPassable, COOP_SCALE: CO,

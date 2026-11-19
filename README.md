@@ -1,4 +1,4 @@
-# Forja Elemental 2.3
+# Forja Elemental 3.0
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,6 +18,15 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 3.0 — Mesa de Guerra
+- **Doutrinas inimigas** (`D.DOCTRINES`, `E.generateHorde(..., doctrineId)`): composição, formação, emboscada e modificadores por horda; `tune`/`coopTune` calibram a escala adaptativa.
+- **Inteligência inimiga** (`D.COUNTERS`, `G.armyProfile`, `applyIntel` em game.js): a partir do Ato II a horda analisa o elenco e aplica contramedidas (`e.cmods`, fora da normalização de poder), anticura, caçada ao campeão e batedores.
+- **Táticas** (`D.TACTICS`, `G.setTactic`, `ctx.tactic`, alvo em `chooseTarget`). A escala de poder mede o elenco sem tática (`statsCtx(pid, true)`).
+- **Objetivos bônus** (`D.OBJECTIVES`, `pickObjective`/`evalObjective`).
+- **Quartel** (`D.QUARTEL`, `D.TRAITS`, `G.refreshOffers/hire/reroll/toggleLock`, `G.buy` = contrato).
+- **Layout novo**: trilha de campanha, painel de inteligência, barra de táticas, doca Comando + Quartel; tema em `css/style.css` (bloco v3.0).
+- Simulador: `node tests/sim.js <runs> <asc> <jogadores> <escala> [tática|dumb]` — imprime taxa de vitória por doutrina.
 
 ## Novidades da 2.3
 - **Escalas de poder** (`D.SCALING`, `G.targetRatio`, `applyScaling` em game.js): Clássica, Nivelada, Proporcional e Dinâmica (padrão, com Medidor de Ameaça −3..+10: +7% de poder inimigo e +6% de recompensa por ponto).
