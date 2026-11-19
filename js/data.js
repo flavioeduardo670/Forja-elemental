@@ -10,7 +10,7 @@
 
   const CONFIG = {
     COLS: 12, ROWS: 12, PLAYER_ROW: 6, BENCH: 8, MAX_TEAM: 16,
-    ROOMS_PER_ACT: 5, ACTS: 3, TOTAL_ROOMS: 15,
+    ROOMS_PER_ACT: 6, ACTS: 4, TOTAL_ROOMS: 24, COOP_TOTAL_UNITS: 12, COOP_XP_DIV: 12,
     START_GOLD: 150, START_CITADEL: 100, START_TEAM_LIMIT: 4,
     SELL_RATIO: 0.75, INTEREST_RATE: 0.10, INTEREST_CAP: 25,
     XP_BASE: 95, XP_GROWTH: 1.40,
@@ -224,7 +224,11 @@
     escudo_vigia: { name: 'Escudo do Vigia', icon: '🔰', rarity: 'comum', desc: 'Aliados começam com Escudo de 12% da Vida Máxima.' },
     presa_vampira: { name: 'Presa Vampírica', icon: '🦇', rarity: 'rara', desc: '+10% Roubo de Vida para todo o time.' },
     teia_arcana: { name: 'Teia Arcana', icon: '🕸️', rarity: 'rara', desc: 'Inimigos começam o combate com 35% de lentidão por 4s.' },
-    cristal_sinergia: { name: 'Cristal de Sinergia', icon: '🔷', rarity: 'lendaria', desc: 'Cada elemento já ativo no time (1+ stack) conta +1 stack para a sinergia.' }
+    cristal_sinergia: { name: 'Cristal de Sinergia', icon: '🔷', rarity: 'lendaria', desc: 'Cada elemento já ativo no time (1+ stack) conta +1 stack para a sinergia.' },
+    // Relíquias secretas (nunca aparecem em sorteios; só por eventos raros)
+    pato_borracha: { name: 'Pato de Borracha', icon: '🦆', rarity: 'lendaria', secret: true, desc: 'Ouve todos os seus problemas. +6% Crítico para todo o time, e às vezes ele faz "quack".' },
+    ovo_dourado: { name: 'Ovo Dourado', icon: '🥚', rarity: 'rara', secret: true, desc: 'Algo se mexe lá dentro. Talvez choque depois de algumas vitórias...' },
+    pintinho_dourado: { name: 'Pintinho Dourado', icon: '🐣', rarity: 'lendaria', secret: true, desc: 'Piu! O time inteiro ganha +8% Vel. Ataque e +8% Vida.' }
   };
   for (const [id, r] of Object.entries(RELICS)) r.id = id;
   const RARITY = {
@@ -291,15 +295,36 @@
   /* ---------------- ATOS, FACÇÕES INIMIGAS E CHEFES ---------------------------- */
   const ACTS = {
     1: { name: 'Floresta Cinzenta', short: 'ATO I', palette: { enemyA: '#131d1b', enemyB: '#0f1715', playerA: '#132229', playerB: '#0e1a20', divider: 'rgba(16,185,129,.45)' },
-      enemyColor: '#65a30d',
+      enemyColor: '#65a30d', storyIcon: '🌲',
+      story: ['Há mil anos, a <b>Forja Elemental</b> manteve o equilíbrio entre Fogo, Água, Pedra, Ar, Sol e Lua. Esta noite, seu coração parou de bater.',
+        'Sem ela, os elementos enlouquecem. A Floresta Cinzenta foi a primeira a cair: árvores andam, lobos caçam em matilhas de cinzas e um <b>Colosso de Obsidiana</b> bloqueia a estrada.',
+        'Você comanda a última Cidadela. Recrute heróis, una suas forças e chegue ao coração da Forja antes que seja tarde.'],
       faction: { vanguarda: ['Tronco Animado', '🪵'], berserker: ['Lobo Cinzento', '🐺'], cacador: ['Arqueiro Goblin', '🏹'], arcanista: ['Xamã Fúngico', '🍄'], sombra: ['Aranha Sombria', '🕷️'], clerigo: ['Espírito do Bosque', '🌫️'], artifice: ['Goblin Engenhoqueiro', '🔩'], lanceiro: ['Batedor Silvano', '🔱'], druida: ['Ent Jovem', '🌳'], paladino: ['Cavaleiro Silvestre', '🐗'], monge: ['Macaco Lutador', '🐒'], alquimista: ['Bruxa do Brejo', '🧪'], bardo: ['Fada Cantora', '🧚'], necromante: ['Coruja Agourenta', '🦉'] } },
     2: { name: 'Ruínas Solares', short: 'ATO II', palette: { enemyA: '#241b12', enemyB: '#1c150e', playerA: '#1c2233', playerB: '#151a28', divider: 'rgba(245,158,11,.5)' },
-      enemyColor: '#d97706',
+      enemyColor: '#d97706', storyIcon: '🏜️',
+      story: ['Além da floresta, as <b>Ruínas Solares</b> guardam os templos que um dia alimentaram a Forja com luz.',
+        'Os sacerdotes dourados ainda rezam — mas agora para o <b>Leviatã das Marés</b>, que inundou os vales e arrasta tudo para o fundo.',
+        'Rios cortam o caminho. Procure as pontes… e não deixe que o inimigo as controle primeiro.'],
       faction: { vanguarda: ['Golem de Areia', '🗿'], berserker: ['Escorpião Rubro', '🦂'], cacador: ['Sentinela Solar', '☀️'], arcanista: ['Sacerdote Dourado', '📿'], sombra: ['Múmia Furtiva', '🧟'], clerigo: ['Oráculo das Dunas', '🔆'], artifice: ['Autômato de Bronze', '🤖'], lanceiro: ['Guarda do Templo', '🔱'], druida: ['Cacto Ancestral', '🌵'], paladino: ['Templário do Sol', '🛕'], monge: ['Monge do Deserto', '🧘'], alquimista: ['Alquimista de Âmbar', '🏺'], bardo: ['Encantador de Serpentes', '🐍'], necromante: ['Embalsamador', '⚱️'] } },
     3: { name: 'Abismo do Eclipse', short: 'ATO III', palette: { enemyA: '#231126', enemyB: '#190c1c', playerA: '#151930', playerB: '#0f1326', divider: 'rgba(192,132,252,.5)' },
-      enemyColor: '#9333ea',
-      faction: { vanguarda: ['Cavaleiro do Vazio', '♜'], berserker: ['Devorador Abissal', '👹'], cacador: ['Atirador Espectral', '🏹'], arcanista: ['Lich Menor', '💀'], sombra: ['Espectro', '👻'], clerigo: ['Acólito do Eclipse', '🕯️'], artifice: ['Forja-Viva', '⚙️'], lanceiro: ['Lanceiro Caído', '🔱'], druida: ['Raiz Corrompida', '🥀'], paladino: ['Cavaleiro Profano', '🗡️'], monge: ['Asceta do Vazio', '🌀'], alquimista: ['Destilador de Almas', '🧫'], bardo: ['Sirene Abissal', '🧜'], necromante: ['Arquilich', '👿'] } }
+      enemyColor: '#9333ea', storyIcon: '🌑',
+      story: ['O céu escurece. No <b>Abismo do Eclipse</b>, o Sol e a Lua lutam sem parar desde que a Forja silenciou.',
+        'O <b>Arconte do Eclipse</b> devora a luz de ambos. Dizem que quem resiste à sua fase Solar não resiste à Lunar.',
+        'Lava escorre pelas ravinas. Cada passo em falso custa caro.'],
+      faction: { vanguarda: ['Cavaleiro do Vazio', '♜'], berserker: ['Devorador Abissal', '👹'], cacador: ['Atirador Espectral', '🏹'], arcanista: ['Lich Menor', '💀'], sombra: ['Espectro', '👻'], clerigo: ['Acólito do Eclipse', '🕯️'], artifice: ['Forja-Viva', '⚙️'], lanceiro: ['Lanceiro Caído', '🔱'], druida: ['Raiz Corrompida', '🥀'], paladino: ['Cavaleiro Profano', '🗡️'], monge: ['Asceta do Vazio', '🌀'], alquimista: ['Destilador de Almas', '🧫'], bardo: ['Sirene Abissal', '🧜'], necromante: ['Arquilich', '👿'] } },
+    4: { name: 'Coração da Forja', short: 'ATO IV', palette: { enemyA: '#2a1a0a', enemyB: '#211406', playerA: '#1b1f33', playerB: '#151829', divider: 'rgba(251,191,36,.6)' },
+      enemyColor: '#ef4444', storyIcon: '🔥',
+      story: ['Por fim, a <b>Forja Elemental</b>. Ilhas de pedra flutuam sobre um abismo de brasas, ligadas por pontes estreitas.',
+        'No centro, o próprio <b>Ferreiro Primordial</b> despertou — e decidiu que o mundo precisa ser <i>reforjado</i> do zero.',
+        'Esta é a última batalha. Tudo o que você construiu até aqui será posto à prova.'],
+      faction: { vanguarda: ['Golem Rúnico', '🪨'], paladino: ['Guardião da Bigorna', '⚒️'], berserker: ['Salamandra Furiosa', '🦎'], cacador: ['Balestra Viva', '🎯'], sombra: ['Lâmina de Brasa', '🔪'], lanceiro: ['Hoplita de Aço', '🔱'], monge: ['Asceta das Brasas', '🧘'], arcanista: ['Arcano Fundido', '🔥'], alquimista: ['Fundidor', '🫕'], clerigo: ['Vestal da Chama', '🕯️'], bardo: ['Tamboreiro da Forja', '🥁'], artifice: ['Mestre Engenheiro', '🛠️'], druida: ['Árvore de Ferro', '🌳'], necromante: ['Ceifador de Cinzas', '⚰️'] } }
   };
+
+  /* Epílogo exibido ao vencer a campanha */
+  const EPILOGUE = ['O martelo do Ferreiro Primordial cai pela última vez — e, em vez de destruir, <b>acende</b>.',
+    'A Forja volta a pulsar. Fogo e Água se acalmam, Pedra e Ar se reencontram, Sol e Lua dividem o céu outra vez.',
+    'Nas muralhas da Cidadela, os nomes dos seus heróis são gravados em metal que nunca esfria.',
+    '<i>…mas no fundo da Forja, algo ainda bate. Talvez uma Ascensão mais alta revele o que é.</i>'];
 
   const BOSSES = {
     1: { name: 'Colosso de Obsidiana', symbol: '🗿', color: '#d97706', script: 'colosso', elements: { pedra: 2, fogo: 2 }, skills: { vg_impacto: 2, vg_bastiao: 2 }, hpMult: 2.6, adMult: 1.35, apMult: 1.35,
@@ -307,7 +332,9 @@
     2: { name: 'Leviatã das Marés', symbol: '🐉', color: '#0284c7', script: 'leviata', elements: { agua: 3, ar: 2 }, skills: { ar_orbe: 2, cl_prece: 2 }, hpMult: 3.3, adMult: 1.5, apMult: 1.65,
       mechanic: 'A cada 9s invoca 2 Crias das Marés. Abaixo de 50%: Maremoto deixa todo o seu time lento por 4s.' },
     3: { name: 'Arconte do Eclipse', symbol: '👁️', color: '#9333ea', script: 'arconte', elements: { solar: 3, lunar: 3, fogo: 2 }, skills: { ar_meteoro: 3, vg_impacto: 3, cl_luz: 2 }, hpMult: 4.2, adMult: 1.7, apMult: 1.85,
-      mechanic: 'Alterna a cada 10s entre Fase Solar (+40% Dano Verdadeiro) e Fase Lunar (+40% Roubo de Vida). Abaixo de 30%: Eclipse Total causa 20% da Vida a todo o seu time.' }
+      mechanic: 'Alterna a cada 10s entre Fase Solar (+40% Dano Verdadeiro) e Fase Lunar (+40% Roubo de Vida). Abaixo de 30%: Eclipse Total causa 20% da Vida a todo o seu time.' },
+    4: { name: 'Ferreiro Primordial', symbol: '⚒️', color: '#f59e0b', script: 'ferreiro', elements: { fogo: 3, pedra: 2, solar: 2 }, skills: { vg_impacto: 3, be_furia: 3, pa_consagrar: 2 }, hpMult: 4.6, adMult: 1.8, apMult: 1.8,
+      mechanic: 'A cada 8s, Martelada Primordial atinge um grupo do seu time (14% da Vida e atordoa). Em 70% e 35% de Vida invoca 2 Avatares Elementais. Abaixo de 25%: Forja Final (+60% Vel. Ataque e Escudo).' }
   };
 
   const ELITE_AFFIXES = {
@@ -343,7 +370,7 @@
   const ASCENSIONS = [
     { level: 0, name: 'Expedição Padrão', desc: 'A experiência base.' },
     { level: 1, name: 'Ascensão I', desc: 'Inimigos +6% em Vida e Dano por nível de Ascensão.' },
-    { level: 2, name: 'Ascensão II', desc: 'Acima, e começa com -30g.' },
+    { level: 2, name: 'Ascensão II', desc: 'Acima, e cada jogador começa com -30g.' },
     { level: 3, name: 'Ascensão III', desc: 'Acima, e Elites aparecem com mais frequência.' },
     { level: 4, name: 'Ascensão IV', desc: 'Acima, e a Cidadela começa com -20 de Vida.' },
     { level: 5, name: 'Ascensão V', desc: 'Acima, e inimigos comuns (a partir da Sala 3) ganham 1 stack elemental extra.' }
@@ -370,12 +397,13 @@
     floresta: { name: 'Floresta Densa', icon: '🌲', acts: [1], desc: 'Muitas árvores dão esquiva; rochas pelo caminho.' },
     rio: { name: 'Rio das Pontes', icon: '🌉', acts: [1, 2], desc: 'Um rio corta o campo ao meio: só se cruza pelas pontes.' },
     lago: { name: 'Lago Central', icon: '🏞️', acts: [1, 2, 3], desc: 'Um lago no centro divide o combate em dois flancos.' },
-    montanha: { name: 'Passo da Montanha', icon: '🏔️', acts: [1, 2, 3], desc: 'Uma cordilheira com poucas passagens estreitas e colinas.' },
+    montanha: { name: 'Passo da Montanha', icon: '🏔️', acts: [1, 2, 3, 4], desc: 'Uma cordilheira com poucas passagens estreitas e colinas.' },
     pantano: { name: 'Pântano Sombrio', icon: '🪷', acts: [1, 3], desc: 'Lama que retarda o avanço e pequenas poças.' },
-    ravina: { name: 'Ravina Partida', icon: '🕳️', acts: [2, 3], desc: 'Um abismo vertical separa os flancos; pontes nas pontas.' },
-    ruinas: { name: 'Ruínas Antigas', icon: '🏛️', acts: [2, 3], desc: 'Pilares de pedra criam corredores e esconderijos.' },
-    magma: { name: 'Campos de Magma', icon: '🌋', acts: [3], desc: 'Rios de lava ferem quem os atravessa; rochas de obsidiana.' }
+    ravina: { name: 'Ravina Partida', icon: '🕳️', acts: [2, 3, 4], desc: 'Um abismo vertical separa os flancos; pontes nas pontas.' },
+    ruinas: { name: 'Ruínas Antigas', icon: '🏛️', acts: [2, 3, 4], desc: 'Pilares de pedra criam corredores e esconderijos.' },
+    magma: { name: 'Campos de Magma', icon: '🌋', acts: [3, 4], desc: 'Rios de lava ferem quem os atravessa; rochas de obsidiana.' },
+    ilhas: { name: 'Ilhas Flutuantes', icon: '🏝️', acts: [4], desc: 'Ilhas de pedra sobre o abismo, ligadas por pontes estreitas.' }
   };
 
-  FE.Data = { CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
+  FE.Data = { EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);

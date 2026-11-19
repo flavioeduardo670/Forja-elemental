@@ -1,4 +1,4 @@
-# Forja Elemental 2.1
+# Forja Elemental 2.2
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,3 +18,9 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 2.2
+- Co-op local 2–4 jogadores (12 unidades divididas; ouro, banco e mochila por jogador; sistema de Pronto; escolhas em rodízio; doações).
+- Campanha com 4 Atos × 6 salas (24), Ato IV "Coração da Forja" e chefe final Ferreiro Primordial; história, epílogo e créditos.
+- 52 conquistas em 6 categorias (8 secretas) e títulos; Desafio Diário; pausa; renomear unidades.
+- Balanceamento: `node tests/sim.js <runs> <ascensao> <jogadores>` — a escala do co-op fica em `FE.Engine.COOP_SCALE`.

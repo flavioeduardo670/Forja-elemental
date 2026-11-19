@@ -14,8 +14,9 @@
   };
   R.resize = function () {
     const rect = R.canvas.parentElement.getBoundingClientRect();
-    const dpr = root.devicePixelRatio || 1;
+    const dpr = FE.settings && FE.settings.retro ? 0.32 : (root.devicePixelRatio || 1);
     R.canvas.width = Math.round(rect.width * dpr); R.canvas.height = Math.round(rect.height * dpr);
+    R.tcache = null;
     R.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     R.tile = rect.width / C.COLS;
   };
@@ -149,7 +150,7 @@
     if (!G.run) return;
     const run = G.run;
     ctx.font = `700 ${Math.max(9, Math.round(T * 0.16))}px Inter, sans-serif`; ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(248,113,113,.5)'; ctx.fillText(`${D.ACTS[run.act].short} • ${D.ACTS[run.act].name.toUpperCase()} — SALA ${run.room}/15 • ${(D.LAYOUTS[run.layout] || D.LAYOUTS.planicie).name.toUpperCase()}`, 8, 14);
+    ctx.fillStyle = 'rgba(248,113,113,.5)'; ctx.fillText(`${D.ACTS[run.act].short} • ${D.ACTS[run.act].name.toUpperCase()} — SALA ${run.room}/${C.TOTAL_ROOMS} • ${(D.LAYOUTS[run.layout] || D.LAYOUTS.planicie).name.toUpperCase()}`, 8, 14);
     ctx.fillStyle = 'rgba(56,189,248,.5)'; ctx.fillText('SEU CAMPO (LINHAS 6–11)', 8, W - 6);
 
     const editing = G.canEdit();
@@ -177,7 +178,8 @@
         }
         token({ x: u.col + 0.5, y: u.row + 0.5, color: D.ARCHETYPES[u.archetypeId].color, symbol: D.ARCHETYPES[u.archetypeId].symbol, level: u.level, elements: u.elements,
           items: u.items.length, hp: s.maxHp, displayHp: s.maxHp, maxHp: s.maxHp, shield: s.initialShield, mana: s.startMana, maxMana: s.maxMana,
-          xp: u.xp, nextXp: G.xpToNext(u.level), isPlayer: true, selected: sel === u.id, evo: u.evoPoints > 0 });
+          xp: u.xp, nextXp: G.xpToNext(u.level), isPlayer: true, selected: sel === u.id, evo: u.evoPoints > 0,
+          ownerColor: G.isCoop() ? G.ownerOf(u).color : null, faded: G.isCoop() && !G.isMine(u) });
       }
       if (drag && drag.fromBoard && drag.overCanvas) {
         const u = G.find(drag.id);
@@ -188,11 +190,12 @@
       const c = G.combat;
       const list = c.units.filter(u => !u.dead).sort((a, b) => a.y - b.y);
       for (const u of list) {
-        const ru = u.rosterId ? G.find(u.rosterId) : null;
+        const ru = u.rosterId ? G.find(u.rosterId) : (u.owner && u.owner.rosterId ? G.find(u.owner.rosterId) : null);
         token({ x: u.x + u.lungeX, y: u.y + u.lungeY, color: u.color, symbol: u.symbol, level: u.level, isBoss: u.isBoss, isElite: u.isElite, affixes: u.affixes,
           elements: u.elements, items: ru ? ru.items.length : 0, hp: u.hp, displayHp: u.displayHp, maxHp: u.stats.maxHp, shield: u.shield, mana: u.mana,
           maxMana: u.stats.maxMana, xp: ru ? ru.xp : 0, nextXp: ru ? G.xpToNext(ru.level) : 1, isPlayer: u.team === 'player', isSummon: u.isSummon,
-          selected: u.rosterId && G.selectedId === u.rosterId, stunned: u.stun > 0, chilled: u.chill > 0, burning: u.burn > 0 });
+          selected: u.rosterId && G.selectedId === u.rosterId, stunned: u.stun > 0, chilled: u.chill > 0, burning: u.burn > 0,
+          ownerColor: G.isCoop() && u.team === 'player' && ru ? G.ownerOf(ru).color : null });
       }
       fx(c.fx);
     }
@@ -219,6 +222,8 @@
     const r = T * (u.isBoss ? 0.40 : u.isSummon ? 0.24 : 0.31);
     ctx.save();
     if (u.preview) ctx.globalAlpha = 0.86;
+    if (u.faded) ctx.globalAlpha = 0.78;
+    if (u.ownerColor) { ctx.strokeStyle = u.ownerColor; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2); ctx.stroke(); }
     if (u.selected) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(cx, cy, r + 5, 0, Math.PI * 2); ctx.stroke(); }
     if (u.isElite && !u.isBoss) {
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(cx, cy, r + 3.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);

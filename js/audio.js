@@ -44,6 +44,9 @@
         case 'defeat': this.tone(311.13, 'sawtooth', 0.2, 0.06, 0, 220); this.tone(233.08, 'sawtooth', 0.28, 0.06, 0.16, 165); break;
         case 'bossGong': this.tone(110, 'sawtooth', 0.5, 0.09, 0, 72); this.tone(82, 'sine', 0.7, 0.07, 0.05, 60); break;
         case 'click': this.tone(660, 'sine', 0.04, 0.03); break;
+        case 'quack': this.tone(520, 'square', 0.07, 0.05, 0, 380); this.tone(470, 'square', 0.09, 0.05, 0.09, 330); break;
+        case 'anvil': this.tone(1760, 'triangle', 0.25, 0.08, 0, 1500); this.tone(2637, 'sine', 0.3, 0.04, 0.01); break;
+        case 'secret': [659.25, 783.99, 1046.5, 1318.5, 1567.98].forEach((f, i) => this.tone(f, 'square', 0.1, 0.05, i * 0.07)); break;
       }
     }
   };

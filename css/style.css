@@ -294,3 +294,63 @@ canvas { display: block; width: 100%; height: 100%; cursor: pointer; touch-actio
 .ach-progress { height: 4px; background: var(--bg-base); border-radius: 99px; overflow: hidden; margin-top: 4px; }
 .ach-progress div { height: 100%; background: var(--gold); }
 .toast.ach { border-color: #facc15; background: linear-gradient(135deg, #3b2a06, #1c1508); }
+
+/* ---------- 2.2: co-op, história, créditos, segredos ---------- */
+.players-bar { width: 100%; max-width: 680px; display: none; flex-wrap: wrap; gap: 6px; align-items: center; }
+.player-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-surface-alt); border: 1px solid var(--border-strong); border-radius: 999px; padding: 4px 10px 4px 6px; color: var(--text-secondary); font-size: 11.5px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.player-chip:hover { border-color: var(--pc); }
+.player-chip.active { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 18%, var(--bg-surface-alt)); color: var(--text-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc) 35%, transparent); }
+.player-chip .pc-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 6px var(--pc); }
+.player-chip .pc-name { font-weight: 800; }
+.player-chip .pc-gold { color: var(--gold-light); }
+.player-chip .pc-units { color: var(--emerald); }
+.player-chip .pc-pe { background: var(--violet); color: #fff; border-radius: 999px; padding: 0 5px; font-size: 10px; }
+.player-chip .pc-ready { font-weight: 900; color: var(--text-muted); }
+.player-chip.ready .pc-ready { color: var(--emerald); }
+.players-hint { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.buyer-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chooser-banner { border: 1px solid var(--pc); background: color-mix(in srgb, var(--pc) 12%, transparent); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+.chooser-banner b { color: var(--pc); }
+.names-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px; }
+.daily-box { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.rank-tag { margin-top: 8px; font-size: 12px; font-weight: 800; color: var(--gold-light); }
+.story { text-align: center; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.story .story-icon { font-size: 54px; filter: drop-shadow(0 0 18px rgba(245,158,11,.4)); animation: floaty 3s ease-in-out infinite; }
+.story p b { color: var(--gold-light); }
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.team-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.team-card { border: 1px solid var(--pc); border-left-width: 4px; border-radius: 8px; padding: 6px 10px; background: var(--bg-surface-alt); display: flex; flex-direction: column; font-size: 12px; }
+.team-card b { color: var(--pc); }
+.acts-bar { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.act-pill { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-muted); }
+.act-pill.cur { border-color: var(--gold); color: var(--gold-light); background: rgba(245,158,11,.12); }
+.act-pill.done { color: var(--emerald); border-color: rgba(16,185,129,.45); }
+.act-sep { color: var(--text-muted); }
+.credits-wrap { height: 340px; overflow: hidden; position: relative; mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent); }
+.credits-roll { text-align: center; animation: creditsRoll 22s linear forwards; padding-top: 340px; }
+.credits-roll h3 { font-family: var(--font-display); color: var(--gold-light); font-size: 22px; margin: 6px 0; }
+.credits-roll h4 { color: var(--sky); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; margin-top: 18px; }
+.credits-roll p { font-size: 14px; color: var(--text-secondary); margin: 3px 0; }
+@keyframes creditsRoll { to { transform: translateY(-100%); } }
+.ach-overall { height: 6px; background: var(--bg-base); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+.ach-overall div { height: 100%; background: linear-gradient(90deg, var(--violet), var(--gold)); }
+.ach-card.secret { border-style: dashed; }
+.give-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--pc); border-radius: 10px; background: var(--bg-surface-alt); flex-wrap: wrap; }
+.rename-btn { background: none; border: none; cursor: pointer; font-size: 12px; opacity: .7; }
+.rename-btn:hover { opacity: 1; }
+.rename-input { width: 100%; padding: 4px 8px; font-size: 13px; }
+.fuse-btn.give { background: var(--emerald); }
+.pause-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 6px; background: rgba(8,13,25,.55); font-family: var(--font-display); font-size: 30px; color: var(--gold-light); letter-spacing: 3px; pointer-events: none; z-index: 2; }
+.pause-overlay small { font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary); letter-spacing: 0; }
+.pause-overlay.show { display: flex; }
+.brand-icon { cursor: pointer; user-select: none; }
+.brand-icon.hit { animation: anvilHit .18s ease-out; }
+@keyframes anvilHit { 0% { transform: scale(1) rotate(0); } 40% { transform: scale(.85) rotate(-8deg); } 100% { transform: scale(1) rotate(0); } }
+.title-hero .logo { cursor: pointer; }
+.spark { position: fixed; width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 8px #f59e0b; pointer-events: none; z-index: 500; animation: spark .9s ease-out forwards; }
+@keyframes spark { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+/* Modo Retrô (segredo) */
+body.retro canvas { image-rendering: pixelated; filter: saturate(1.4) contrast(1.15); }
+body.retro .canvas-container::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px); mix-blend-mode: multiply; }
+body.retro { font-family: 'Courier New', monospace; }
+body.retro .brand-text h1 small::after { content: ' RETRÔ'; color: #22c55e; }

@@ -156,6 +156,8 @@
       if (has('coracao_forja') && items.length > 0) { const bo = 1 + items.length * 0.15; s.maxHp *= bo; s.ad *= bo; s.ap *= bo; }
       if (has('escudo_vigia')) s.initialShieldPct += 0.12;
       if (has('presa_vampira')) s.lifesteal += 0.10;
+      if (has('pato_borracha')) s.critChance += 0.06;
+      if (has('pintinho_dourado')) { s.attackSpeed *= 1.08; s.maxHp *= 1.08; }
     } else {
       // 6b. Inimigos: afixos de elite e ascensão
       for (const af of unit.affixes || []) {
@@ -204,14 +206,15 @@
   function generateActMap(rng, act, asc) {
     const floors = [];
     for (let f = 1; f <= C.ROOMS_PER_ACT; f++) {
-      let count = f === 5 ? 1 : (f === 1 ? 2 : rng.int(2, 3));
-      if (f >= 2 && f <= 4 && rng.chance(0.25)) count = Math.min(4, count + 1);
+      const RPA = C.ROOMS_PER_ACT;
+      let count = f === RPA ? 1 : (f === 1 ? 2 : rng.int(2, 3));
+      if (f >= 2 && f < RPA && rng.chance(0.25)) count = Math.min(4, count + 1);
       const nodes = [];
       for (let i = 0; i < count; i++) {
         let type;
-        if (f === 5) type = 'chefe';
+        if (f === RPA) type = 'chefe';
         else if (f === 1) type = 'combate';
-        else if (f === 4 && i === count - 1) type = 'acampamento';
+        else if (f === RPA - 1 && i === count - 1) type = 'acampamento';
         else type = rng.weighted([['combate', 38], ['elite', asc >= 3 ? 24 : 16], ['misterio', 14], ['forja', 9], ['santuario', 8], ['acampamento', 6], ['mercador', 9]]);
         const room = (act - 1) * C.ROOMS_PER_ACT + f;
         const fights = type === 'combate' || type === 'elite' || type === 'chefe';
@@ -223,7 +226,12 @@
       floors.push(nodes);
     }
     // Garante ao menos 1 combate/elite no andar 2 para não travar o ganho de XP
-    if (!floors[1].some(n => n.type === 'combate' || n.type === 'elite')) { const n0 = floors[1][0]; n0.type = 'combate'; n0.affix = rollAffix(rng, n0.room); n0.layout = n0.layout || rng.pick(Object.keys(D.LAYOUTS).filter(k => D.LAYOUTS[k].acts.includes(act))); }
+    // Garante ao menos 1 combate/elite nos andares intermediários para não travar o XP
+    for (let fi = 1; fi < floors.length - 1; fi++) {
+      if (floors[fi].some(n => n.type === 'combate' || n.type === 'elite')) continue;
+      const n0 = floors[fi][0]; n0.type = 'combate'; n0.affix = rollAffix(rng, n0.room);
+      n0.layout = n0.layout || rng.pick(Object.keys(D.LAYOUTS).filter(k => D.LAYOUTS[k].acts.includes(act)));
+    }
     const link = (a, id) => { if (!a.next.includes(id)) a.next.push(id); };
     for (let f = 0; f < floors.length - 1; f++) {
       const A = floors[f], B = floors[f + 1];
@@ -303,6 +311,15 @@
         for (let k = rnd(4, 6); k > 0; k--) { const c = rnd(0, 5), r = rnd(2, 5); set(c, r, 'P'); set(N - 1 - c, r, 'P'); }
         for (let k = 2; k > 0; k--) set(rnd(0, N - 1), rnd(1, 3), 'H');
         break;
+      case 'ilhas': {
+        for (let r = 2; r < half; r++) for (let c = 0; c < N; c++) set(c, r, 'R');
+        for (let r = 2; r <= 4; r++) for (let c = 1; c <= 4; c++) set(c, r, '.');
+        for (let r = 2; r <= 4; r++) for (let c = 7; c <= 10; c++) set(c, r, '.');
+        set(5, 3, 'B'); set(6, 3, 'B');
+        for (const c of rng.shuffle([2, 3, 8, 9]).slice(0, 2)) set(c, 5, 'B');
+        for (let k = 2; k > 0; k--) set(rnd(1, 10), rnd(2, 4), 'H');
+        break;
+      }
       case 'magma': {
         for (let c = 0; c < N; c++) set(c, 5, 'L');
         for (const c of rng.shuffle([2, 5, 6, 9]).slice(0, 2)) set(c, 5, 'B');
@@ -351,14 +368,19 @@
     };
   }
 
-  function generateHorde(rng, room, act, roomType, asc, terrain) {
+  /* Escala do co-op: o time tem sempre até 12 unidades, não importa se 2, 3 ou 4 jogadores */
+  const CO = { count: 1.3, countPer: 0.05, stat: 1.05, statPer: 0.13, boss: 1.3, bossPer: 0.14 };
+  function generateHorde(rng, room, act, roomType, asc, terrain, players = 1) {
     const enemies = [];
     const archKeys = Object.keys(D.ARCHETYPES);
     const elKeys = Object.keys(D.ELEMENTS);
     const fac = D.ACTS[act];
     const isBoss = roomType === 'chefe', isElite = roomType === 'elite';
-    const count = isBoss ? Math.min(8, 2 + Math.floor(room * 0.32)) : Math.min(14, 2 + Math.floor(room * 0.68) + (isElite ? 1 : 0));
-    const scale = 1 + (room - 1) * 0.15 + (isElite ? 0.15 : 0);
+    // Co-op: mais inimigos e um pouco mais fortes (o time pode ter até 12 unidades)
+    const coop = players > 1, coopCount = coop ? CO.count + CO.countPer * room : 1, coopStat = coop ? CO.stat + CO.statPer * room : 1;
+    const baseCount = isBoss ? 2 + Math.floor(room * 0.26) : 2 + Math.floor(room * 0.55) + (isElite ? 1 : 0);
+    const count = Math.min(isBoss ? 12 : 22, Math.round(baseCount * coopCount));
+    const scale = (1 + (room - 1) * 0.135 + (isElite ? 0.15 : 0)) * coopStat;
 
     const cols = [...Array(C.COLS).keys()];
     const slots = [];
@@ -373,7 +395,7 @@
         isBoss: true, isElite: true, level: Math.max(3, Math.floor(room * 0.95)), col: lead.col, row: lead.row,
         elements: { ...bc.elements }, skills: { ...bc.skills }, affixes: [], script: bc.script,
         baseStats: {
-          maxHp: Math.round(820 * scale * bc.hpMult), ad: Math.round(52 * scale * bc.adMult), ap: Math.round(65 * scale * bc.apMult),
+          maxHp: Math.round(820 * scale * bc.hpMult * (coop ? CO.boss + CO.bossPer * room : 1)), ad: Math.round(52 * scale * bc.adMult), ap: Math.round(65 * scale * bc.apMult),
           armor: Math.round(35 + room * 3.5), attackSpeed: 0.85, range: 2.2, critChance: 0.20, moveSpeed: 1.9, maxMana: 85
         }
       });
@@ -405,7 +427,7 @@
       const [fname, fsym] = fac.faction[archKey];
       enemies.push({
         id: `e_${room}_${i}`, name: fname, archetypeId: archKey, symbol: fsym, color: fac.enemyColor,
-        isBoss: false, isElite: false, level: Math.max(1, Math.floor(1 + (room - 1) * 0.45)), col: pos.col, row: pos.row,
+        isBoss: false, isElite: false, level: Math.max(1, Math.floor(1 + (room - 1) * 0.42)), col: pos.col, row: pos.row,
         elements: els, skills, affixes: [],
         baseStats: { ...makeEnemyStats(arch, scale), armor: Math.round(arch.stats.armor * (1 + (room - 1) * 0.05)) }
       });
@@ -831,6 +853,7 @@
 
   function castSkill(c, s, target, isEcho = false) {
     if (!isEcho) sfx('magic');
+    if (s.team === 'player' && c.relics.has('pato_borracha') && c.rng.chance(0.12)) { text(c, s.x, s.y - 0.9, 'QUACK! 🦆', '#fde047', 1.1); sfx('quack'); }
     s.casts++;
     if (s.team === 'player' && c.relics.has('orbe_sobrecarga')) s.stats.ap = Math.round(s.stats.ap * 1.12);
     if (s.stats.manaRefund > 0) s.mana = Math.min(s.stats.maxMana, s.mana + s.stats.manaRefund);
@@ -859,6 +882,37 @@
   }
 
   const BOSS_SCRIPTS = {
+    ferreiro(c, u, dt) {
+      const ss = u.ss;
+      ss.t = (ss.t || 0) + dt;
+      if (ss.t >= 8) {
+        ss.t = 0;
+        const ps = alive(c, 'player');
+        if (ps.length) {
+          // mira no ponto com mais unidades num raio de 2
+          let best = ps[0], bn = 0;
+          for (const p of ps) { const n = ps.filter(q => Math.hypot(q.x - p.x, q.y - p.y) <= 2).length; if (n > bn) { bn = n; best = p; } }
+          shock(c, best.x, best.y, 2.0, '#f59e0b'); particles(c, best.x, best.y, '#fbbf24', 30);
+          text(c, best.x, best.y - 0.8, '⚒️ MARTELADA!', '#fbbf24', 1.3); sfx('bossGong');
+          for (const p of ps) if (Math.hypot(p.x - best.x, p.y - best.y) <= 2) { p.stun = Math.max(p.stun, 1); applyRaw(c, p, Math.round(p.stats.maxHp * 0.14), u, { t: 'MARTELADA', color: '#fbbf24' }); }
+        }
+      }
+      for (const [k, th] of [['s1', 0.70], ['s2', 0.35]]) {
+        if (!ss[k] && u.hp < u.stats.maxHp * th) {
+          ss[k] = true;
+          const els = c.rng.shuffle(['fogo', 'agua', 'pedra', 'ar', 'solar', 'lunar']).slice(0, 2);
+          for (const el of els) summon(c, u, { name: `Avatar de ${D.ELEMENTS[el].name}`, symbol: D.ELEMENTS[el].icon, color: D.ELEMENTS[el].color, archetypeId: 'berserker',
+            hp: Math.round(u.stats.maxHp * 0.10), ad: Math.round(u.stats.ad * 0.40), extra: { armor: 30, moveSpeed: 2.4, lifesteal: el === 'lunar' ? 0.3 : 0 } });
+          FE.Bus.emit('clog', { t: '⚒️ O Ferreiro forja Avatares Elementais!', type: 'danger' });
+        }
+      }
+      if (!ss.final && u.hp < u.stats.maxHp * 0.25) {
+        ss.final = true;
+        u.stats.attackSpeed *= 1.6; u.shield += Math.round(u.stats.maxHp * 0.15); u.color = '#ef4444';
+        shock(c, u.x, u.y, 4, '#ef4444'); text(c, u.x, u.y - 0.8, '🔥 FORJA FINAL!', '#ef4444', 1.4); sfx('bossGong');
+        FE.Bus.emit('clog', { t: '🔥 Forja Final! O Ferreiro acelera seus golpes.', type: 'danger' });
+      }
+    },
     colosso(c, u) {
       if (!u.ss.enraged && u.hp < u.stats.maxHp * 0.5) {
         u.ss.enraged = true;
@@ -1040,7 +1094,7 @@
 
   FE.Engine = {
     computeStats, synergyTier, orderTier, generateActMap, generateHorde, rollAffix,
-    generateTerrain, terrainAt, tileBlocked, nearestPassable,
+    generateTerrain, terrainAt, tileBlocked, nearestPassable, COOP_SCALE: CO,
     createCombat, updateCombat, updateFx, combatReport
   };
 })(typeof window !== 'undefined' ? window : globalThis);
