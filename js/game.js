@@ -191,7 +191,7 @@
   G.statsCtx = (pid, neutral) => ({ isEnemy: false, board: G.run.board, relics: new Set(G.run.relics), affix: G.run.affix,
     gold: pid === undefined ? Math.round(G.totalGold() / G.coop()) : G.P(pid).gold, synergy: G.synergyCounts(), orders: G.orderCounts(), tactic: neutral ? null : G.run.tactic });
   G.statsOf = (u, ctx) => E.computeStats(u, ctx || G.statsCtx(u.owner || 0));
-  G.enemyStats = (e) => E.computeStats(e, { isEnemy: true, affix: G.run.affix, ascension: G.run.ascension });
+  G.enemyStats = (e, noDef) => E.computeStats(e, { isEnemy: true, affix: G.run.affix, ascension: G.run.ascension, act: G.run.act, noDef: !!noDef, defK: G.run.scaling === 'classica' || G.run.scaling === 'nivelada' ? (root.__ck || D.ENEMY_DEFENSE.fixedK) : 1 });
 
   /* Pool de XP de uma sala. No co-op cada jogador recebe sua parte
      (pool × teto/6), dividida apenas entre as próprias unidades em campo. */
@@ -628,7 +628,7 @@
     const ctxs = G.run.players.map(p => G.statsCtx(p.id));
     return E.teamPower(G.run.board.map(u => G.statsOf(u, ctxs[u.owner || 0])));
   };
-  G.enemyPower = function (enemies) { return E.teamPower((enemies || G.run.enemies).map(e => G.enemyStats(e))); };
+  G.enemyPower = function (enemies, noDef) { return E.teamPower((enemies || G.run.enemies).map(e => G.enemyStats(e, noDef))); };
 
   /* ---------------- ESCALA DE PODER ADAPTATIVA ----------------
      O poder do jogador é medido ao entrar na sala, usando as MELHORES
@@ -649,9 +649,9 @@
   G.targetRatio = function (type) {
     const r = G.run;
     const t = (SC.targets[type] || SC.targets.combate)[Math.min(3, r.act - 1)];
-    return t * (1 + SC.ascPer * r.ascension) * G.coopFactor() * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
+    return t * (root.__diff || SC.diff) * (1 + SC.ascPer * r.ascension) * G.coopFactor() * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
   };
-  G.coopFactor = () => { const r = G.run, n = r.players.length; return n > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (n === 2 ? 0.85 : n === 4 ? 0.95 : 1) : 1; };
+  G.coopFactor = () => { const r = G.run, n = r.players.length; return n > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (n === 2 ? 1.15 : n === 3 ? 1.85 : 1.45) : 1; };
   G.setScaling = function (mode) {
     if (!G.run || !SC.modes[mode]) return;
     G.run.scaling = mode;
@@ -868,7 +868,7 @@
       gold: Math.round(goldBase(type, room) * G.goldFactor() * rm),
       interest: Math.min(C.INTEREST_CAP, Math.floor(me.gold * C.INTEREST_RATE)),
       xpEach: Math.floor(pool / n), pool, killXp: 16 + room * 3, mult: rm,
-      item: type === 'combate' ? { chance: C.NORMAL_ITEM_DROP, tier: 1 } : type === 'elite' ? { chance: 1, tier: 1 } : { chance: 1, tier: 2, each: true },
+      item: type === 'combate' ? { chance: ((G.run.normalWins || 0) + 1) % C.ITEM_EVERY === 0 ? 1 : 0, tier: 1, left: C.ITEM_EVERY - ((G.run.normalWins || 0) % C.ITEM_EVERY) } : type === 'elite' ? { chance: 1, tier: 1 } : { chance: 1, tier: 2, each: true },
       relic: type === 'elite' ? 'elite' : type === 'chefe' ? 'boss' : null,
       act: type === 'chefe' && room < C.TOTAL_ROOMS,
       defeat: { citadel: Math.max(10, Math.round((r.enemies.length || 4) * 6 / Math.sqrt(G.coop())) + r.act * 4), xpEach: Math.floor(pool * 0.45 / n) }
@@ -939,8 +939,9 @@
       const pend = [];
       const giveItem = (pid, it, label) => { G.P(pid).bag.push(it); rewards.items.push({ pid, item: it, label }); lines.push(`🎁 ${label}: ${D.ITEMS[it.id].name}`); };
       if (r.roomType === 'combate') {
-        if (withRng(rng => rng.chance(C.NORMAL_ITEM_DROP))) giveItem(nextChooser(), rollItem(1), 'Item encontrado');
-        else rewards.extras.push({ icon: '🎲', text: `Sem item desta vez (chance de ${Math.round(C.NORMAL_ITEM_DROP * 100)}% em combates comuns).`, dim: true });
+        r.normalWins = (r.normalWins || 0) + 1;
+        if (r.normalWins % C.ITEM_EVERY === 0) giveItem(nextChooser(), rollItem(1), 'Item de patrulha');
+        else rewards.extras.push({ icon: '🎁', text: `Próximo item em ${C.ITEM_EVERY - r.normalWins % C.ITEM_EVERY} combate(s) comum(ns).`, dim: true });
       }
       if (objDone && r.objective.reward.kind === 'item') for (const p of r.players) giveItem(p.id, rollItem(r.objective.reward.tier), 'Objetivo bônus');
       if (objDone) log(`🎖️ Objetivo cumprido: ${G.objectiveText(r.objective)} (${r.objective.reward.text}).`, 'win');
@@ -1040,7 +1041,7 @@
   }
   function storyTutorial() {
     return { kind: 'story', icon: '🧭', title: 'Primeiros passos', tutorial: true, button: 'Entendi!', paragraphs: [
-      '<b>1. Recrute.</b> Contrate recrutas no 🏰 Quartel (parte de baixo da tela). Eles mudam a cada sala e podem ter qualidade e traços; 📜 Contratos garantem qualquer arquétipo por um preço maior. Juntar unidades da mesma Classe/Origem ativa sinergias.',
+      '<b>1. Recrute.</b> Na área Recrutar (parte de baixo da tela) todas as classes estão sempre disponíveis, com preço fixo. Juntar unidades da mesma Classe/Origem ativa sinergias.',
       '<b>2. Posicione.</b> Arraste as unidades no seu lado do campo (linhas de baixo). Tanques na frente, atiradores e magos atrás — ou use 🧭 Auto-posicionar.',
       '<b>3. Escolha o caminho.</b> No 🗺️ Mapa, cada nó é uma sala: combates dão XP e ouro; Forja, Mercador e Santuário dão recursos.',
       '<b>4. Evolua.</b> O XP da sala é <b>dividido</b> entre quem está em campo. Cada nível dá 1 PE: aprimore habilidades ou absorva elementos (botão ⭐ Evoluir).',

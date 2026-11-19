@@ -1,4 +1,4 @@
-# Forja Elemental 3.1
+# Forja Elemental 4.0
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,6 +18,14 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 4.0 — Diorama
+- **Visual novo**: `js/render.js` reescrito com projeção isométrica (`R.project`, `R.tileAt` com correção de altura), blocos com altura por terreno e paleta por Ato; `js/toys.js` define os bonecos de brinquedo (camadas Path2D/SVG) usados no canvas e na interface (`FE.Toy.draw`, `FE.Toy.svg`, `FE.Art.medal` agora devolve um retrato de boneco).
+- **Tema claro em cartões** (bloco v4.0 no fim de `css/style.css`).
+- **Sem sorteio no recrutamento**: todas as classes, preço fixo (`G.buy`); o código do Quartel antigo ficou inativo.
+- **Itens determinísticos**: um item a cada `CONFIG.ITEM_EVERY` (3) combates comuns.
+- **Inimigos veteranos** (`D.ENEMY_DEFENSE`): vida, armadura, resistência mágica e o novo `elemResist` (reduz queimadura, explosões, ricochete e dano verdadeiro) crescendo por Ato; elites ×1,2 e chefes ×1,35. Nas escalas fixas valem ×`fixedK`.
+- **Dificuldade**: `SCALING.diff` (0,72), `kMin` 0,4, `kMax` 7 e `G.coopFactor`. Simulador (IA simples, 45 campanhas): solo Dinâmica ~36%, co-op 2/3/4 ~33/47/33%, Clássica ~17%.
 
 ## Novidades da 3.1 — Arte e clareza
 - **`js/art.js`**: emblemas vetoriais próprios (14 arquétipos, 5 invocações, 4 chefes) usados no canvas (`FE.Art.draw` via Path2D) e no DOM (`FE.Art.svg`/`FE.Art.medal`). Para trocar a arte de uma classe basta editar as camadas em `ICONS`.

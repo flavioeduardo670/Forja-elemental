@@ -10,7 +10,7 @@ const FE = globalThis.FE, G = FE.Game, D = FE.Data;
 if (globalThis.__sweep) Object.assign(FE.Engine.COOP_SCALE, { countPer: globalThis.__sweep.cnt, statPer: globalThis.__sweep.st, bossPer: globalThis.__sweep.boss });
 
 const RUNS = +process.argv[2] || 30, ASC = +process.argv[3] || 0, PLAYERS = +process.argv[4] || 1, SCALING = process.argv[5] || 'dinamica';
-G.loadMeta(); G.meta.maxAscension = 5; G.meta.seenTutorial = true;
+G.loadMeta(); if (globalThis.__defK !== undefined) { const V = FE.Data.ENEMY_DEFENSE; for (const k of ['hp','armor','armorFlat','magic','elem']) V[k] = V[k].map(x => x * globalThis.__defK); } G.meta.maxAscension = 5; G.meta.seenTutorial = true;
 const results = []; const DOC = {}; let errors = 0;
 const ORDER = ['vanguarda', 'arcanista', 'clerigo', 'cacador', 'paladino', 'necromante', 'bardo', 'monge', 'alquimista', 'berserker', 'druida', 'lanceiro', 'artifice', 'sombra'];
 
@@ -27,12 +27,8 @@ function aiPrepPlayer(pid) {
     const have = new Set(mineU.map(u => u.archetypeId));
     const oc = {}; for (const u of G.allUnits()) for (const o of D.ARCHETYPES[u.archetypeId].orders) oc[o] = (oc[o] || 0) + 1;
     const score = (arch, q) => D.ARCHETYPES[arch].orders.reduce((t, o) => t + Math.min(3, oc[o] || 0), 0) * 1.2 + q * 1.5 + ((['front', 'mid', 'flank'].includes(D.ARCHETYPES[arch].pref) === wantFront) ? 2.5 : 0) + (have.has(arch) ? 0.3 : 0);
-    const offers = p.offers.map((o, i) => o && { ...o, i, sc: score(o.arch, o.quality) }).filter(o => o && o.cost <= p.gold).sort((a, b) => b.sc - a.sc);
-    if (offers.length && offers[0].sc < 3 && rolls < 2 && p.gold >= G.rerollCost(pid) + 45) { G.reroll(); rolls++; continue; }
-    if (offers.length) { G.hire(offers[0].i); continue; }
-    if (rolls < 2 && p.gold >= G.rerollCost(pid) + 35) { G.reroll(); rolls++; continue; }
     const arch = ORDER.slice().sort((a, b) => score(b, 0) - score(a, 0))[0];
-    if (p.gold >= G.contractCost(arch) + 20) { G.buy(arch); continue; }
+    if (p.gold >= G.contractCost(arch)) { G.buy(arch); continue; }
     break;
   }
   while (p.bag.length && G.boardOf(pid).some(u => u.items.length < 3)) { const u = G.boardOf(pid).find(u => u.items.length < 3); G.equip(0, u.id); }

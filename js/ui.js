@@ -74,14 +74,14 @@
     $('hud-shards').textContent = G.meta.astralShards;
     $('hud-ach').textContent = `${FE.Achievements.count()}/${FE.Achievements.list.length}`;
     if (!r) return;
-    $('hud-act').textContent = `${D.ACTS[r.act].short} • ${D.ACTS[r.act].name}${r.ascension ? ` • Asc. ${r.ascension}` : ''}`;
-    $('hud-room').textContent = `${r.room} / ${C.TOTAL_ROOMS}`;
+    $('hud-act').textContent = `Ato ${['I', 'II', 'III', 'IV'][r.act - 1] || r.act} · ${D.ACTS[r.act].name}${r.ascension ? ` · Asc. ${r.ascension}` : ''}`;
+    $('hud-room').textContent = `Sala ${r.room} / ${C.TOTAL_ROOMS}`;
     $('hud-citadel').textContent = `${r.citadelHp}/${r.citadelMax}`;
     $('hud-citadel').parentElement.parentElement.classList.toggle('low', r.citadelHp / r.citadelMax < 0.35);
     refreshTrack();
     $('hud-citadel-bar').style.width = `${Math.round(r.citadelHp / r.citadelMax * 100)}%`;
     const me = G.me(), mine = G.boardOf(me.id).length, cap = G.capPerPlayer();
-    $('hud-gold').textContent = `${me.gold}g`;
+    $('hud-gold').textContent = `${me.gold}`;
     $('hud-gold-label').textContent = G.isCoop() ? `Ouro • ${me.name}` : 'Ouro';
     const team = $('hud-team');
     $('hud-team-label').innerHTML = G.isCoop() ? `Em campo • <b style="color:${me.color}">${esc(me.name)}</b> (teto ${cap})` : 'Unidades em campo';
@@ -146,12 +146,12 @@
 
     const start = $('btn-start');
     start.disabled = r.phase !== 'PREP' && r.phase !== 'MAP';
-    if (r.phase === 'MAP') start.innerHTML = '🗺️ Escolher Caminho <kbd>Espaço</kbd>';
-    else if (r.phase === 'COMBAT') start.innerHTML = '🔥 Batalhando...';
-    else if (G.isCoop()) { const me = G.me(), rc = r.players.filter(p => p.ready).length; start.innerHTML = me.ready ? `✖ Cancelar pronto (${esc(me.name)}) • ${rc}/${r.players.length}` : `✋ ${esc(me.name)} pronto! • ${rc}/${r.players.length} <kbd>Espaço</kbd>`; }
-    else start.innerHTML = `⚔️ Iniciar ${r.roomType === 'chefe' ? 'Chefe' : r.roomType === 'elite' ? 'Elite' : 'Combate'} <kbd>Espaço</kbd>`;
+    if (r.phase === 'MAP') start.innerHTML = 'Escolher caminho <kbd>Espaço</kbd>';
+    else if (r.phase === 'COMBAT') start.innerHTML = 'Batalhando…';
+    else if (G.isCoop()) { const me = G.me(), rc = r.players.filter(p => p.ready).length; start.innerHTML = me.ready ? `Cancelar pronto · ${rc}/${r.players.length}` : `${esc(me.name)}: pronto! · ${rc}/${r.players.length}`; }
+    else start.innerHTML = r.roomType === 'chefe' ? 'Enfrentar o chefe!' : 'Lutar!';
     $('btn-pause').style.display = r.phase === 'COMBAT' ? 'inline-flex' : 'none';
-    $('btn-pause').innerHTML = G.paused ? '▶️ Continuar <kbd>P</kbd>' : '⏸️ Pausar <kbd>P</kbd>';
+    $('btn-pause').innerHTML = G.paused ? 'Continuar <kbd>P</kbd>' : 'Pausar <kbd>P</kbd>';
     $('pause-overlay').classList.toggle('show', r.phase === 'COMBAT' && G.paused);
     $('btn-arrange').disabled = !G.canEdit();
     const evo = G.totalEvo(G.isCoop() ? r.active : undefined);
@@ -178,7 +178,7 @@
         const room = (a - 1) * C.ROOMS_PER_ACT + i;
         const st = room < r.room || (room === r.room && (r.phase === 'MAP' || r.phase === 'CHOICE') && !r.enemies.length && r.room > 0) ? 'done' : room === r.room ? 'cur' : '';
         const boss = i === C.ROOMS_PER_ACT;
-        pips.push(`<i class="pip ${st} ${boss ? 'boss' : ''}" ${tipAttr(boss ? `<b>Sala ${room}</b> — ${D.BOSSES[a].symbol} ${D.BOSSES[a].name}` : `Sala ${room}`)}>${boss ? D.BOSSES[a].symbol : ''}</i>`);
+        pips.push(`<i class="pip ${st} ${boss ? 'boss' : ''}" ${tipAttr(boss ? `<b>Sala ${room}</b> — ${D.BOSSES[a].symbol} ${D.BOSSES[a].name}` : `Sala ${room}`)}>${''}</i>`);
       }
       h += `<div class="act-seg ${a === r.act ? 'cur' : a < r.act ? 'done' : ''}"><span class="act-lbl">${D.ACTS[a].short}</span><div class="pips">${pips.join('')}</div></div>`;
     }
@@ -196,7 +196,7 @@
     const chips = [], det = {};
     if (r.roomType === 'chefe') {
       const b = D.BOSSES[r.act];
-      chips.push({ k: 'doc', c: '#facc15', ic: FE.Art.svg(FE.Art.BOSS_KEYS[r.act], { acc: '#fde047' }), kick: 'Chefe', txt: b.name, sub: 'mecânica especial' });
+      chips.push({ k: 'doc', c: '#A16207', ic: FE.Art.svg(FE.Art.BOSS_KEYS[r.act], { acc: '#A16207' }), kick: 'Chefe', txt: b.name, sub: 'mecânica especial' });
       det.doc = `<b>${b.name}</b> — ${b.mechanic}`;
     } else if (r.doctrine) {
       const d = D.DOCTRINES[r.doctrine];
@@ -213,7 +213,7 @@
     }
     const o = r.objective;
     if (o) {
-      chips.push({ k: 'obj', c: '#fbbf24', ic: `<span class="bf-emo">${D.OBJECTIVES[o.id].icon}</span>`, kick: 'Objetivo bônus', txt: G.objectiveText(o), sub: o.reward.text });
+      chips.push({ k: 'obj', c: '#B7791F', ic: `<span class="bf-emo">${D.OBJECTIVES[o.id].icon}</span>`, kick: 'Objetivo bônus', txt: G.objectiveText(o), sub: o.reward.text });
       det.obj = `<b>${D.OBJECTIVES[o.id].icon} ${D.OBJECTIVES[o.id].name}:</b> ${G.objectiveText(o)}. Recompensa extra se cumprir: <b class="gold-text">${o.reward.text}</b>. É opcional — vencer já paga a sala normalmente.`;
     }
     if (UI.intelOpen && !det[UI.intelOpen]) UI.intelOpen = null;
@@ -279,7 +279,7 @@
     if (!r || !r.enemies.length || !r.board.length) return null;
     const pp = G.playerPower(), ep = G.enemyPower();
     const rel = (ep / Math.max(1, pp)) / fairRatio();
-    const lv = rel < 0.6 ? ['Muito fácil', '#34d399'] : rel < 0.85 ? ['Fácil', '#86efac'] : rel < 1.2 ? ['Equilibrado', '#fbbf24'] : rel < 1.6 ? ['Difícil', '#fb923c'] : ['Mortal', '#ef4444'];
+    const lv = rel < 0.6 ? ['Muito fácil', '#0F9F8A'] : rel < 0.85 ? ['Fácil', '#15803D'] : rel < 1.2 ? ['Equilibrado', '#B7791F'] : rel < 1.6 ? ['Difícil', '#fb923c'] : ['Mortal', '#ef4444'];
     return { pp, ep, rel, label: lv[0], color: lv[1] };
   };
   function refreshPowerPanel() {
@@ -300,8 +300,8 @@
     const pv = G.previewRewards();
     el.style.display = 'flex';
     const each = G.isCoop() ? ' cada' : '';
-    const item = r.roomType === 'combate' ? `${Math.round(pv.item.chance * 100)}% item` : r.roomType === 'elite' ? 'item ★1' : 'item ★2';
-    const tip = `<b>🏆 Se vencer</b><br>🪙 +${pv.gold}g${each} (+${pv.interest}g de juros)<br>📘 +${pv.xpEach} XP por unidade em campo (+${pv.killXp} por abate)<br>🎁 ${r.roomType === 'combate' ? `${Math.round(pv.item.chance * 100)}% de chance de item ★1` : r.roomType === 'elite' ? 'item ★1 garantido' : `item ★2 para ${G.isCoop() ? 'cada jogador' : 'você'}`}${pv.relic ? `<br>🏺 escolha de relíquia${pv.relic === 'boss' ? ' (rara/lendária)' : ''}` : ''}${pv.act ? '<br>🌄 próximo Ato + ❤️ 25' : ''}${pv.mult > 1 ? `<br>🔥 +${Math.round((pv.mult - 1) * 100)}% pela Ameaça` : ''}<br><br><b>💥 Se perder</b><br>❤️ cerca de −${pv.defeat.citadel} de Cidadela • 📘 +${pv.defeat.xpEach} XP/unidade • tenta a sala de novo`;
+    const item = r.roomType === 'combate' ? (pv.item.chance ? 'item ★1' : `item em ${pv.item.left}`) : r.roomType === 'elite' ? 'item ★1' : 'item ★2';
+    const tip = `<b>🏆 Se vencer</b><br>🪙 +${pv.gold}g${each} (+${pv.interest}g de juros)<br>📘 +${pv.xpEach} XP por unidade em campo (+${pv.killXp} por abate)<br>🎁 ${r.roomType === 'combate' ? (pv.item.chance ? 'item ★1 garantido (a cada 3 combates comuns)' : `próximo item em ${pv.item.left} combate(s) comum(ns)`) : r.roomType === 'elite' ? 'item ★1 garantido' : `item ★2 para ${G.isCoop() ? 'cada jogador' : 'você'}`}${pv.relic ? `<br>🏺 escolha de relíquia${pv.relic === 'boss' ? ' (rara/lendária)' : ''}` : ''}${pv.act ? '<br>🌄 próximo Ato + ❤️ 25' : ''}${pv.mult > 1 ? `<br>🔥 +${Math.round((pv.mult - 1) * 100)}% pela Ameaça` : ''}<br><br><b>💥 Se perder</b><br>❤️ cerca de −${pv.defeat.citadel} de Cidadela • 📘 +${pv.defeat.xpEach} XP/unidade • tenta a sala de novo`;
     el.setAttribute('data-tip', tip);
     el.innerHTML = `<span class="rs-lbl win">Vitória</span><span>🪙 <b>+${pv.gold}g</b>${each}</span><span>📘 <b>${pv.xpEach}</b> XP/un.</span><span>🎁 ${item}</span>${pv.relic ? '<span class="rs-hl">🏺 relíquia</span>' : ''}${pv.mult > 1 ? `<span class="rs-hl">🔥 +${Math.round((pv.mult - 1) * 100)}%</span>` : ''}
       <span class="rs-sep"></span><span class="rs-lbl lose">Derrota</span><span>❤️ −${pv.defeat.citadel}</span>`;
@@ -312,7 +312,7 @@
     const t = r.threat || 0;
     el.style.display = 'flex';
     const pct = Math.round((t - SCL.threatMin) / (SCL.threatMax - SCL.threatMin) * 100);
-    el.innerHTML = `<span class="label">🔥 Ameaça</span><span class="value" style="color:${t >= 6 ? '#f87171' : t >= 3 ? '#fb923c' : t < 0 ? '#38bdf8' : '#fde68a'}">${t > 0 ? '+' : ''}${t}</span><div class="threat-meter"><div style="width:${pct}%"></div></div>`;
+    el.innerHTML = `<span class="label">🔥 Ameaça</span><span class="value" style="color:${t >= 6 ? '#f87171' : t >= 3 ? '#fb923c' : t < 0 ? '#0284C7' : '#9A6500'}">${t > 0 ? '+' : ''}${t}</span><div class="threat-meter"><div style="width:${pct}%"></div></div>`;
     el.setAttribute('data-tip', `<b>Medidor de Ameaça</b> (escala Dinâmica)<br>Inimigos: <b>${t >= 0 ? '+' : ''}${Math.round(SCL.threatPer * t * 100)}%</b> de poder • Recompensas: <b>+${Math.round(SCL.rewardPer * Math.max(0, t) * 100)}%</b> de ouro e XP<br><br>Vitória dominante (sem baixas, &lt;14s): +2<br>Vitória confortável: +1<br>Vitória por pouco: −1 • Derrota: −2<br>Novo Ato: −1${t >= 6 ? '<br><br>⚠️ Ameaça 6+: elites ganham um afixo extra.' : ''}`);
   }
 
@@ -320,7 +320,7 @@
   function refreshBench() {
     const me = G.me(), grid = $('bench-grid');
     $('bench-count').textContent = `${me.bench.filter(Boolean).length} / ${C.BENCH}`;
-    $('bench-title').innerHTML = G.isCoop() ? `🪑 Banco de <b style="color:${me.color}">${esc(me.name)}</b> — arraste para o campo` : '🪑 Banco de Reservas — arraste para o campo (não divide XP)';
+    $('bench-title').innerHTML = G.isCoop() ? `Reservas de <b style="color:${me.color}">${esc(me.name)}</b>` : 'Reservas';
     grid.innerHTML = me.bench.map((u, i) => {
       if (!u) return `<div class="bench-slot" data-slot="${i}"></div>`;
       const a = D.ARCHETYPES[u.archetypeId];
@@ -343,40 +343,17 @@
   }
   function refreshShop() {
     const me = G.me(), edit = G.canEdit();
-    document.querySelectorAll('#shop-tabs [data-shop]').forEach(b => b.classList.toggle('active', b.dataset.shop === UI.shopTab));
-    $('reroll-cost').textContent = `${G.rerollCost(me.id)}g`;
-    $('btn-reroll').disabled = !edit || me.gold < G.rerollCost(me.id) || UI.shopTab !== 'rec';
-    $('btn-reroll').style.visibility = UI.shopTab === 'rec' ? 'visible' : 'hidden';
-    $('quartel-hint').textContent = UI.shopTab === 'rec'
-      ? (G.isCoop() ? `Recrutas de ${me.name} • novos a cada sala • 🔒 trava para a próxima • arraste uma unidade aqui para vender` : 'Novos recrutas a cada sala • 🔒 trava uma carta para a próxima • arraste uma unidade aqui para vender')
-      : `Contrate qualquer arquétipo, sem traço, por ${Math.round((QT.contractMult - 1) * 100)}% a mais`;
+    $('quartel-hint').textContent = G.isCoop() ? `Recrutamento de ${me.name} • todas as classes, preço fixo • arraste uma unidade aqui para vender` : 'Todas as classes, preço fixo — sem sorteio • arraste uma unidade aqui para vender';
     const grid = $('shop-grid');
-    grid.className = 'shop-grid ' + (UI.shopTab === 'rec' ? 'quartel' : 'contracts');
-    if (UI.shopTab === 'con') {
-      grid.innerHTML = Object.values(D.ARCHETYPES).map(a => {
-        const cost = G.contractCost(a.id), ok = me.gold >= cost && edit, gain = synergyGain(a);
-        return `<div class="con-card ${ok ? '' : 'unaffordable'}" data-buy="${a.id}" style="--ac:${a.color}" ${tipAttr(archTip(a) + (gain.length ? `<br><br><b style="color:#facc15">Ativa:</b> ${gain.map(o => `${o.icon} ${o.name}`).join(', ')}` : ''))}>
-          ${gain.length ? '<span class="next-tier">▲</span>' : ''}${FE.Art.medal(a.id, { color: a.color, cls: 'sm' })}<span class="con-name">${a.name}</span><span class="con-role">${a.role}</span><span class="con-cost">🪙 ${cost}</span></div>`;
-      }).join('');
-      return;
-    }
-    const oc0 = G.orderCounts();
-    const tierOf = (a) => Math.max(0, ...a.orders.map(id => D.ORDERS[id].thresholds.indexOf(oc0[id] + 1) + 1));
-    const quals = me.offers.filter(Boolean).map(o => tierOf(D.ARCHETYPES[o.arch]));
-    const minTier = quals.filter(t => t > 0).length > 2 ? 2 : 1;
-    grid.innerHTML = me.offers.map((o, i) => {
-      if (!o) return `<div class="rq-card empty"><span>✔</span>Contratado<small>Volta na próxima sala</small></div>`;
-      const a = D.ARCHETYPES[o.arch], q = QT.quality[o.quality], t = o.trait ? D.TRAITS[o.trait] : null;
-      const ok = me.gold >= o.cost && edit, gain = tierOf(a) >= minTier ? synergyGain(a) : [];
-      const traitTxt = t ? `${t.icon} ${t.name}${o.el ? `: ${D.ELEMENTS[o.el].icon} ${D.ELEMENTS[o.el].name}` : ''}` : '';
-      const tip = `${archTip(a)}${t ? `<br><br><b>${t.icon} Traço — ${t.name}${t.rare ? ' (raro)' : ''}:</b> ${t.desc}${o.el ? ` (${D.ELEMENTS[o.el].name})` : ''}` : ''}${o.quality ? `<br><b style="color:${q.color}">${q.name}:</b> chega no Nível ${q.level} com ${q.level - 1} PE para gastar.` : ''}${gain.length ? `<br><br><b style="color:#facc15">Colocar em campo ativa:</b> ${gain.map(g => `${g.icon} ${g.name} (${G.orderCounts()[g.id] + 1})`).join(', ')}` : ''}`;
-      return `<div class="rq-card q${o.quality} ${ok ? '' : 'unaffordable'} ${o.locked ? 'locked' : ''}" data-hire="${i}" style="--ac:${a.color};--qc:${q.color}" ${tipAttr(tip)}>
-        <div class="rq-top"><span class="rq-quality">${q.name}</span><button class="rq-lock" data-lock="${i}" title="${o.locked ? 'Destravar' : 'Travar para a próxima sala'}">${o.locked ? '🔒' : '🔓'}</button></div>
-        <div class="rq-art">${FE.Art.medal(o.arch, { color: a.color, quality: o.quality, cls: 'lg' })}${q.level > 1 ? `<span class="rq-lvl">Nv.${q.level}</span>` : ''}${gain.length ? '<span class="rq-up" title="Completa uma sinergia">▲</span>' : ''}</div>
-        <div class="rq-name">${a.name}</div><div class="rq-role">${a.role} · ${a.orders.map(id => `<span style="color:${D.ORDERS[id].color}" title="${D.ORDERS[id].name}">${D.ORDERS[id].icon}</span>`).join(' ')}</div>
-        ${statBars(a)}
-        <div class="rq-trait ${t ? (t.rare ? 'rare' : '') : 'none'}">${t ? traitTxt : 'Sem traço'}</div>
-        <div class="rq-buy"><span>🪙 ${o.cost}g</span><em>Contratar</em></div></div>`;
+    const oc = G.orderCounts();
+    grid.innerHTML = Object.values(D.ARCHETYPES).map(a => {
+      const cost = G.contractCost(a.id), ok = me.gold >= cost && edit;
+      const gain = a.orders.map(id => D.ORDERS[id]).filter(o => o.thresholds.includes(oc[o.id] + 1) && oc[o.id] > 0);
+      return `<div class="rec-card ${ok ? '' : 'unaffordable'}" style="--ac:${a.color}" ${tipAttr(archTip(a) + (gain.length ? `<br><br><b>Ativa:</b> ${gain.map(o => `${o.icon} ${o.name}`).join(', ')}` : ''))}>
+        ${gain.length ? '<span class="rec-up" aria-label="Completa uma sinergia">▲</span>' : ''}
+        <div class="rec-art">${FE.Toy.svgArch(a.id, 80, 84, 1.25)}</div>
+        <b class="rec-name">${a.name}</b><span class="rec-role">${a.role}</span>
+        <button class="rec-buy" data-buy="${a.id}" ${ok ? '' : 'disabled'}>${cost} ouro</button></div>`;
     }).join('');
   }
 
@@ -486,6 +463,8 @@
       </div>
       ${boss ? `<div class="info-box"><h4>👑 Mecânica</h4>${boss.mechanic}</div>` : ''}
       ${statCells(s)}
+      <div class="def-row" ${tipAttr('Defesas de veterano: crescem a cada Ato. Armadura reduz dano físico; resistência mágica reduz dano mágico; resistência elemental reduz queimadura, explosões, ricochete e dano verdadeiro.')}>
+        <span><i class="dot phys"></i>Armadura <b>${Math.round(s.armor)}</b></span><span><i class="dot mag"></i>Res. mágica <b>${Math.round((s.magicReduce || 0) * 100)}%</b></span><span><i class="dot elem"></i>Res. elemental <b>${Math.round((s.elemResist || 0) * 100)}%</b></span></div>
       <div><div class="sec-label">Elementos</div><div class="tags-wrap">${elementsHtml(e.elements)}</div></div>
       <div><div class="sec-label">Habilidades</div><div class="ability-list">${skillsHtml(e.skills)}</div></div>
       <button class="btn btn-secondary" data-act="clear-enemy">← Voltar às minhas unidades</button>`;
@@ -616,20 +595,20 @@
     mapd.floors.forEach(fl => fl.forEach(n => n.next.forEach(id => {
       const a = pos[n.id], b = pos[id];
       const onPath = visited.has(n.id) && (visited.has(id) || avail.has(id));
-      edges += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${onPath ? '#fbbf24' : '#3d5280'}" stroke-width="${onPath ? 3 : 2}" stroke-dasharray="${onPath ? '' : '5 6'}" opacity="${onPath ? 0.9 : 0.6}"/>`;
+      edges += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${onPath ? '#13897C' : '#AAB4C3'}" stroke-width="${onPath ? 3 : 2}" stroke-dasharray="${onPath ? '' : '5 6'}" opacity="${onPath ? 0.9 : 0.6}"/>`;
     })));
     mapd.floors.forEach(fl => fl.forEach(n => {
       const p = pos[n.id], t = D.NODE_TYPES[n.type];
       const isCur = r.nodeId === n.id, isAv = avail.has(n.id), isVis = visited.has(n.id);
       const rad = n.type === 'chefe' ? 30 : 23;
       let rwTxt = t.reward;
-      if (['combate', 'elite', 'chefe'].includes(n.type) && r.phase === 'MAP') { const pv = G.previewRewards(n.type, n.room); rwTxt = `🪙 ~${pv.gold}g${G.isCoop() ? ' cada' : ''} • 📘 ~${pv.pool} XP${G.isCoop() ? ' (sua parte)' : ''} a dividir • ${n.type === 'combate' ? '🎁 30% item' : n.type === 'elite' ? '🎁 item + 🏺 relíquia' : '🎁 item ★2 + 🏺 relíquia + 🌄 Ato'}`; }
-      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}<br><span style="color:#fde68a">Recompensa: ${rwTxt}</span>${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
+      if (['combate', 'elite', 'chefe'].includes(n.type) && r.phase === 'MAP') { const pv = G.previewRewards(n.type, n.room); rwTxt = `🪙 ~${pv.gold}g${G.isCoop() ? ' cada' : ''} • 📘 ~${pv.pool} XP${G.isCoop() ? ' (sua parte)' : ''} a dividir • ${n.type === 'combate' ? '🎁 item a cada 3 combates' : n.type === 'elite' ? '🎁 item + 🏺 relíquia' : '🎁 item ★2 + 🏺 relíquia + 🌄 Ato'}`; }
+      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}<br><span style="color:#9A6500">Recompensa: ${rwTxt}</span>${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
       nodes += `<g class="map-node ${isAv ? 'reachable' : ''}" data-node="${n.id}" ${tipAttr(tip)} opacity="${!isAv && !isVis && !isCur ? 0.55 : 1}">
         ${isAv ? `<circle class="ring" cx="${p.x}" cy="${p.y}" r="${rad + 6}" fill="none" stroke="${t.color}"/>` : ''}
-        <circle class="body" cx="${p.x}" cy="${p.y}" r="${rad}" fill="${isVis ? '#2a2f45' : '#18233c'}" stroke="${isCur ? '#fbbf24' : t.color}" stroke-width="${isCur ? 4 : 2}"/>
+        <circle class="body" cx="${p.x}" cy="${p.y}" r="${rad}" fill="${isVis ? '#E7F5F2' : '#FFFFFF'}" stroke="${isCur ? '#1E2433' : t.color}" stroke-width="${isCur ? 4 : 2}"/>
         <text x="${p.x}" y="${p.y + 1}" text-anchor="middle" dominant-baseline="middle" font-size="${n.type === 'chefe' ? 26 : 20}">${isVis && !isCur ? '✔️' : t.icon}</text>
-        <text x="${p.x}" y="${p.y + rad + 15}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#94a3b8">${t.name}${n.layout ? ' ' + D.LAYOUTS[n.layout].icon : ''}</text></g>`;
+        <text x="${p.x}" y="${p.y + rad + 15}" text-anchor="middle" font-size="11" font-weight="800" fill="#3D4659">${t.name}${n.layout ? ' ' + D.LAYOUTS[n.layout].icon : ''}</text></g>`;
     }));
     const floorsLbl = Array.from({ length: RPA }, (_, i) => i + 1).map(f => `<text x="${fx(f)}" y="18" text-anchor="middle" font-size="11" font-weight="800" fill="#64748b">SALA ${(r.act - 1) * RPA + f}</text>`).join('');
     const boss = D.BOSSES[r.act];
@@ -718,7 +697,7 @@
           ${rw.mult > 1 ? `<div class="rc-note">🔥 inclui +${Math.round((rw.mult - 1) * 100)}% pela Ameaça</div>` : ''}<div class="rc-note">Juros: 10% do ouro guardado (máx. ${C.INTEREST_CAP}g).</div></div></div>`;
       }
       if (rw.won) {
-        cards += `<div class="rcard items"><div class="rc-ic">🎁</div><div class="rc-body"><h4>Itens</h4>${rw.items.length ? rw.items.map(it => `<div class="rc-line">${pname(it.pid)}<span class="item-pill t${it.item.tier}">${D.ITEMS[it.item.id].icon} ${D.ITEMS[it.item.id].name} ${'★'.repeat(it.item.tier)}</span><small>${it.label} • foi para a mochila</small></div>`).join('') : `<div class="rc-line muted">Nenhum item desta vez <small>(${Math.round(C.NORMAL_ITEM_DROP * 100)}% de chance em combates comuns)</small></div>`}</div></div>`;
+        cards += `<div class="rcard items"><div class="rc-ic">🎁</div><div class="rc-body"><h4>Itens</h4>${rw.items.length ? rw.items.map(it => `<div class="rc-line">${pname(it.pid)}<span class="item-pill t${it.item.tier}">${D.ITEMS[it.item.id].icon} ${D.ITEMS[it.item.id].name} ${'★'.repeat(it.item.tier)}</span><small>${it.label} • foi para a mochila</small></div>`).join('') : `<div class="rc-line muted">Nenhum item desta vez</div><div class="rc-note">${(rw.extras.find(e => /^Próximo item/.test(e.text)) || { text: `Um item garantido a cada ${C.ITEM_EVERY} combates comuns.` }).text}</div>`}</div></div>`;
         if (rw.relic) cards += `<div class="rcard relic"><div class="rc-ic">🏺</div><div class="rc-body"><h4>Relíquia</h4><div class="rc-line">Você escolherá <b>1 de 3 relíquias</b> ${rw.relic === 'boss' ? '(maior chance de rara/lendária)' : ''} na próxima tela.</div></div></div>`;
       }
       const xpRows = (rw.units || []).map((u, i) => {
@@ -742,7 +721,7 @@
           <div class="rc-note">Próximas salas: inimigos ${t.after >= 0 ? '+' : ''}${Math.round(SCL.threatPer * t.after * 100)}% • recompensas +${Math.round(SCL.rewardPer * Math.max(0, t.after) * 100)}%</div></div></div>`;
       }
       if (rw.citadel) cards += `<div class="rcard citadel ${rw.citadel.delta < 0 ? 'bad' : ''}"><div class="rc-ic">🏰</div><div class="rc-body"><h4>Cidadela</h4><div class="rc-line"><b class="big">${rw.citadel.delta > 0 ? '+' : ''}${rw.citadel.delta}</b> <small>${rw.citadel.hp}/${rw.citadel.max}</small></div><div class="mini-bar"><div style="width:${Math.round(rw.citadel.hp / rw.citadel.max * 100)}%"></div></div></div></div>`;
-      const ex = rw.extras.filter(e => !/^Sem item/.test(e.text));
+      const ex = rw.extras.filter(e => !/^Sem item|^Próximo item/.test(e.text));
       if (ex.length) cards += `<div class="rcard extras wide"><div class="rc-body">${ex.map(e => `<div class="rc-line ${e.dim ? 'muted' : ''}">${e.icon} ${e.text}</div>`).join('')}</div></div>`;
     } else cards = `<div class="report-lines">${p.lines.map(l => `<div>${l}</div>`).join('')}</div>`;
 
@@ -836,7 +815,7 @@
     const els = Object.values(D.ELEMENTS).map(el => {
       const st = u.elements[el.id] || 0, team = syn[el.id], next = team + (onBoard ? 1 : 0);
       const reach = onBoard && C.SYN_THRESHOLDS.includes(next);
-      return `<button class="evo-choice" data-el="${el.id}" style="border-left:3px solid ${el.color}"><div class="evo-choice-top"><span style="color:${el.color}">${el.icon} ${el.name} (${st} → ${st + 1})</span><span style="font-size:10.5px;color:${reach ? '#facc15' : 'var(--text-muted)'}">Time: ${team} → ${next}${reach ? ' ⭐' : ''}</span></div><div class="evo-choice-desc"><b>Pessoal:</b> ${el.personalDesc}</div></button>`;
+      return `<button class="evo-choice" data-el="${el.id}" style="border-left:3px solid ${el.color}"><div class="evo-choice-top"><span style="color:${el.color}">${el.icon} ${el.name} (${st} → ${st + 1})</span><span style="font-size:10.5px;color:${reach ? '#A16207' : 'var(--text-muted)'}">Time: ${team} → ${next}${reach ? ' ⭐' : ''}</span></div><div class="evo-choice-desc"><b>Pessoal:</b> ${el.personalDesc}</div></button>`;
     }).join('');
     const body = openModal('evo', {
       title: `⭐ Evolução — Pontos de Evolução (PE)${G.isCoop() ? ' — ' + esc(G.me().name) : ''}`, sub: 'Aprimore habilidades exclusivas (até Nv.3) ou acumule elementos para sinergias 2/4/6/8.', size: 'wide',
@@ -903,7 +882,7 @@
   UI.openCodex = function (tab, onBack) {
     if (tab) UI.codexTab = tab;
     if (onBack !== undefined) UI.codexBack = onBack;
-    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['dou', '🧠 Doutrinas'], ['qua', '🏰 Quartel & Táticas'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
+    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['dou', '🧠 Doutrinas'], ['qua', '🏰 Recrutamento & Táticas'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
     let content = '';
     const t = UI.codexTab;
     if (t === 'guia') content = `<div class="codex-prose">
@@ -940,11 +919,10 @@
       <p>A partir do <b>Ato II</b>, a horda também usa <b>inteligência</b>: ao você entrar na sala ela analisa as melhores unidades do seu elenco (campo + banco) e prepara <b>contramedidas</b> contra o seu ponto mais previsível (1 no Ato II, até 2 nos Atos III–IV). Você vê o que eles prepararam e ainda pode trocar unidades, posição e tática antes de lutar.</p></div>
       <div class="codex-grid">${Object.values(D.DOCTRINES).map(d => `<div class="codex-card" style="border-color:${d.color}66"><h4><span>${d.icon} ${d.name}</span><span class="kind-tag">doutrina • sala ${d.minRoom}+</span></h4><div>${d.desc}</div><div class="muted"><b>Fraqueza:</b> ${d.weak}</div></div>`).join('')}
       ${Object.values(D.COUNTERS).map(c => `<div class="codex-card" style="border-color:${c.color}66"><h4><span>${c.icon} ${c.name}</span><span class="kind-tag">contramedida</span></h4><div>${c.desc}</div><div class="muted"><b>Resposta:</b> ${c.answer}</div></div>`).join('')}</div>`;
-    if (t === 'qua') content = `<div class="codex-prose" style="margin-bottom:12px;"><h3>Quartel</h3><p>A cada sala o Quartel oferece <b>${D.QUARTEL.slots} recrutas</b> (sempre pelo menos um de linha de frente e um de retaguarda). Cada um tem <b>qualidade</b> — ${D.QUARTEL.quality.map(q => `<b style="color:${q.color}">${q.name}</b> (Nv.${q.level}, preço ×${q.costMult})`).join(', ')} — e pode ter um <b>traço</b>. Heróis aparecem mais nos Atos finais e sempre têm um traço raro. Parte das ofertas puxa arquétipos que completam as Ordens que você já tem.</p>
-      <p><b>🎲 Rolar</b> troca as cartas não travadas (${D.QUARTEL.rerollBase}g, +${D.QUARTEL.rerollStep}g a cada rolagem na mesma sala). <b>🔒 Travar</b> guarda uma carta para a próxima sala. <b>📜 Contratos</b> contratam qualquer arquétipo sem traço por ${Math.round((D.QUARTEL.contractMult - 1) * 100)}% a mais — o caminho garantido, porém caro.</p>
-      <h3>Táticas</h3><p>Antes de cada luta escolha a postura do exército na barra acima do tabuleiro. Ela vale até você trocar.</p></div>
+    if (t === 'qua') content = `<div class="codex-prose" style="margin-bottom:12px;"><h3>Recrutamento</h3><p>Todas as ${Object.keys(D.ARCHETYPES).length} classes estão sempre disponíveis, com <b>preço fixo</b> — não há sorteio nem rolagem. O ▲ indica que aquele recruta completa um nível de sinergia. Arraste uma unidade para a área de recrutamento para vendê-la.</p>
+      <h3>Táticas</h3><p>Antes de cada luta escolha a postura do exército na barra abaixo do tabuleiro. Ela vale até você trocar.</p>
+      <h3>Inimigos veteranos</h3><p>A cada Ato os inimigos ganham <b>vida extra</b> (+${D.ENEMY_DEFENSE.hp.map(x => Math.round(x * 100) + '%').join(' / ')}), <b>armadura</b>, <b>resistência mágica</b> (reduz dano mágico) e <b>resistência elemental</b> (reduz queimadura, explosões de Fogo, ricochete de Ar e dano verdadeiro de Solar). Elites e chefes recebem ainda mais. Veja os valores no Inspetor ao clicar num inimigo.</p></div>
       <div class="codex-grid">${Object.values(D.TACTICS).map(x => `<div class="codex-card"><h4>${x.icon} ${x.name}</h4><div>${x.desc}</div></div>`).join('')}
-      ${Object.values(D.TRAITS).map(x => `<div class="codex-card" ${x.rare ? 'style="border-color:#fbbf2466"' : ''}><h4><span>${x.icon} ${x.name}</span><span class="kind-tag">${x.rare ? 'traço raro' : 'traço'}</span></h4><div>${x.desc}</div></div>`).join('')}
       ${Object.values(D.OBJECTIVES).map(x => `<div class="codex-card"><h4><span>${x.icon} ${x.name}</span><span class="kind-tag">objetivo</span></h4><div>${x.text('N')}</div></div>`).join('')}</div>`;
     if (t === 'rw') content = `<div class="codex-prose">
       <h3>De onde vem o poder do seu exército</h3>
@@ -963,6 +941,11 @@
       <p>Poder de uma unidade = √(vida efetiva × dano por segundo), contando armadura, resistência mágica, itens, relíquias, sinergias e nível. O poder do time é o <b>quadrado da soma</b> (lei de Lanchester): 6 unidades médias valem bem mais que 3 fortes. A barra <b>Seu exército × Horda</b> compara os dois e indica se a luta está Fácil, Equilibrada, Difícil ou Mortal para o momento da campanha.</p>
       <p>Nas escalas adaptativas o jogo mede a força do seu <b>elenco inteiro</b> (inclusive o banco) ao entrar na sala — então guardar unidades fortes no banco não engana o sistema, e espalhar XP entre mais unidades não é punido. A correção é suave (raiz quadrada, limitada entre ×${D.SCALING.kMin} e ×${D.SCALING.kMax}), para que boas decisões ainda sejam recompensadas.</p></div>`;
     if (t === 'notas') content = `<div class="codex-prose">
+      <h3>v4.0 — Diorama</h3>
+      <ul><li><b>Novo visual</b>: tabuleiro isométrico em blocos com altura (montanhas sobem, água e lava afundam), bonecos de brinquedo para todas as classes, inimigos e chefes, e interface clara em cartões.</li>
+      <li><b>Sem sorteio no recrutamento</b>: todas as classes sempre disponíveis, preço fixo; sem rolagem, trava ou traços aleatórios.</li>
+      <li><b>Itens de combate garantidos</b>: um item a cada 3 combates comuns (antes era 30% de chance).</li>
+      <li><b>Inimigos mais duros</b>: vida extra e defesas física, mágica e elemental crescentes por Ato; dificuldade geral recalibrada.</li></ul>
       <h3>v3.1 — Arte e clareza</h3>
       <ul><li><b>Arte própria</b> para todas as classes, invocações e chefes, com miniaturas de tabuleiro (base metálica, espinhos nos inimigos, selo de nível).</li>
       <li><b>Layout mais limpo</b>: briefing em chips expansíveis, poder e recompensas numa linha, sinergias inativas recolhidas, Inspetor com retrato.</li>
@@ -1125,7 +1108,7 @@
       const u = G.find(d.id);
       if (!u) { UI.drag = null; return; }
       const a = D.ARCHETYPES[u.archetypeId], gh = $('drag-ghost');
-      gh.textContent = a.symbol; gh.style.background = a.color + '55'; gh.style.display = 'flex';
+      gh.innerHTML = FE.Toy.svgArch(u.archetypeId, 64, 72, 1.15); gh.style.background = 'transparent'; gh.style.display = 'flex';
       $('tooltip').style.display = 'none';
     }
     if (d.moved) {
@@ -1156,7 +1139,7 @@
     const t = R.tileAt(e.clientX, e.clientY);
     const r = G.run;
     if (r.phase === 'COMBAT' && G.combat) {
-      const hit = G.combat.units.find(u => !u.dead && u.rosterId && Math.hypot(u.x - t.px / R.tile, u.y - t.py / R.tile) < 0.45);
+      const hit = G.combat.units.find(u => !u.dead && u.rosterId && Math.hypot(u.x - t.wx, u.y - t.wy) < 0.6);
       if (hit) { G.selectedId = hit.rosterId; UI.inspectEnemyId = null; refreshInspector(); }
       return;
     }
@@ -1193,8 +1176,6 @@
       const h = e.target.closest('[data-hire]'); if (h) return G.hire(+h.dataset.hire);
       const c = e.target.closest('[data-buy]'); if (c) G.buy(c.dataset.buy);
     });
-    $('shop-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-shop]'); if (b) { UI.shopTab = b.dataset.shop; refreshShop(); } });
-    $('btn-reroll').addEventListener('click', () => G.reroll());
     $('intel-panel').addEventListener('click', (e) => { const b = e.target.closest('[data-intel]'); if (!b) return; UI.intelOpen = UI.intelOpen === b.dataset.intel ? null : b.dataset.intel; refreshIntel(); });
     $('tactic-bar').addEventListener('click', (e) => { const b = e.target.closest('[data-tactic]'); if (b) G.setTactic(b.dataset.tactic); });
     $('left-tabs').addEventListener('click', (e) => {

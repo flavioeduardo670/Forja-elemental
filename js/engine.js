@@ -52,6 +52,7 @@
     if (m.execute) s.executeBonus += m.execute;
     if (m.highHp) s.highHpBonus += m.highHp;
     if (m.inspire) s.inspireAura += m.inspire;
+    if (m.elemResist) s.elemResist = Math.min(0.6, s.elemResist + m.elemResist);
   }
 
   function computeStats(unit, ctx) {
@@ -65,7 +66,7 @@
       dodge: 0, lifesteal: 0, thorns: 0, executeBonus: 0, highHpBonus: 0, healPowerMult: 1, initialShield: 0,
       trueDmgBonus: 0, dmgReduction: 0, magicPen: 0, armorPen: 0, manaRefund: 0, dmgDealtMult: 1, regenPct: 0,
       auraHeal: 0, burnPct: 0, explodePct: 0, chillAmt: 0, chainTargets: 0, solarAuraReduce: 0, xpMult: 0, initialShieldPct: 0,
-      guardAura: 0, inspireAura: 0, summonMult: 0, summonHp: 0, magicReduce: 0
+      guardAura: 0, inspireAura: 0, summonMult: 0, summonHp: 0, magicReduce: 0, elemResist: 0
     };
 
     // 1. Stacks elementais individuais
@@ -199,6 +200,15 @@
       const asc = ctx.ascension || 0;
       if (asc > 0) { const m = 1 + asc * 0.06; s.maxHp *= m; s.ad *= m; s.ap *= m; }
       applyMods(s, unit.mods); applyMods(s, unit.cmods);
+      // Defesas de veterano: crescem por Ato (vida, armadura, resistência mágica e elemental)
+      if (!ctx.noDef) {
+        const V = D.ENEMY_DEFENSE, ai = Math.max(0, Math.min(3, (ctx.act || 1) - 1));
+        const bossK = (unit.isBoss ? V.bossMult : unit.isElite ? V.eliteMult : 1) * (ctx.defK === undefined ? 1 : ctx.defK);
+        s.maxHp *= 1 + V.hp[ai] * bossK;
+        s.armor = s.armor * (1 + V.armor[ai] * bossK) + V.armorFlat[ai] * (ctx.defK === undefined ? 1 : ctx.defK);
+        s.magicReduce = Math.min(0.6, s.magicReduce + V.magic[ai] * bossK);
+        s.elemResist = Math.min(0.6, s.elemResist + V.elem[ai] * bossK);
+      }
     }
 
     // 7. Arena
@@ -483,7 +493,7 @@
     maxHp: hp, ad, ap: 0, armor: 20, attackSpeed: 1.0, range: 1.45, critChance: 0.10, critDmg: 1.75, moveSpeed: 2.4,
     maxMana: 999, startMana: 0, manaRegen: 0, manaPerAttack: 0, dodge: 0, lifesteal: 0, thorns: 0, executeBonus: 0,
     highHpBonus: 0, healPowerMult: 1, initialShield: 0, trueDmgBonus: 0, dmgReduction: 0, magicPen: 0, armorPen: 0,
-    manaRefund: 0, dmgDealtMult: 1, regenPct: 0, auraHeal: 0, burnPct: 0, explodePct: 0, chillAmt: 0, chainTargets: 0,
+    manaRefund: 0, dmgDealtMult: 1, regenPct: 0, auraHeal: 0, burnPct: 0, explodePct: 0, chillAmt: 0, chainTargets: 0, elemResist: 0, magicReduce: 0,
     solarAuraReduce: 0, ...extra
   });
 
@@ -634,7 +644,7 @@
     else if (type === 'physical') armor *= 1 - Math.min(0.9, (att ? att.stats.armorPen : 0) + (opts.armorPen || 0));
     else armor = 0;
     dmg = dmg * (100 / (100 + Math.max(0, armor))) * (1 - tgt.stats.dmgReduction) * (type === 'magic' ? 1 - (tgt.stats.magicReduce || 0) : 1);
-    const trueD = att && type !== 'true' && att.stats.trueDmgBonus > 0 ? raw * att.stats.trueDmgBonus : 0;
+    const trueD = att && type !== 'true' && att.stats.trueDmgBonus > 0 ? raw * att.stats.trueDmgBonus * (1 - (tgt.stats.elemResist || 0)) : 0;
     const final = Math.max(3, Math.round(dmg + trueD));
 
     const color = crit ? '#facc15' : (type === 'magic' ? '#d8b4fe' : (type === 'true' ? '#fde68a' : '#f8fafc'));
@@ -646,7 +656,7 @@
       if (ls > 0) att.hp = Math.min(att.stats.maxHp, att.hp + Math.round(final * ls));
       if (att.stats.burnPct > 0 && !tgt.dead) {
         tgt.burn = 3.0;
-        tgt.burnDps = Math.max(tgt.burnDps, Math.round(tgt.stats.maxHp * att.stats.burnPct));
+        tgt.burnDps = Math.max(tgt.burnDps, Math.round(tgt.stats.maxHp * att.stats.burnPct * (1 - (tgt.stats.elemResist || 0))));
         tgt.burnExplode = Math.max(tgt.burnExplode, att.stats.explodePct || 0);
         tgt.burnSrc = att;
       }
@@ -697,7 +707,7 @@
     if (v.burn > 0 && v.burnExplode > 0) {
       const boom = Math.round(v.stats.maxHp * v.burnExplode);
       shock(c, v.x, v.y, 1.7, '#ef4444');
-      for (const o of alive(c, v.team)) if (Math.hypot(o.x - v.x, o.y - v.y) <= 1.75) applyRaw(c, o, boom, v.burnSrc, { t: `${boom} 🔥`, color: '#f97316' });
+      for (const o of alive(c, v.team)) if (Math.hypot(o.x - v.x, o.y - v.y) <= 1.75) { const bm = Math.round(boom * (1 - (o.stats.elemResist || 0))); applyRaw(c, o, bm, v.burnSrc, { t: `${bm}`, color: '#f97316' }); }
     }
     if (v.affixes.includes('explosivo')) {
       const boom = Math.round(v.stats.maxHp * 0.20);
@@ -1101,7 +1111,7 @@
             if (u.stats.chainTargets > 0 && u.attackCounter % 4 === 0) {
               let prev = tgt;
               const cd = Math.round(u.stats.ad * 0.55 + u.stats.ap * 0.45);
-              for (const o of opps.filter(o => !o.dead && o !== tgt).slice(0, u.stats.chainTargets - 1)) { beam(c, prev.x, prev.y, o.x, o.y, '#34d399'); dealDamage(c, u, o, cd, 'magic'); prev = o; }
+              for (const o of opps.filter(o => !o.dead && o !== tgt).slice(0, u.stats.chainTargets - 1)) { beam(c, prev.x, prev.y, o.x, o.y, '#34d399'); dealDamage(c, u, o, cd * (1 - (o.stats.elemResist || 0)), 'magic'); prev = o; }
             }
           }
         }

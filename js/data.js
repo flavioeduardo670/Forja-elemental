@@ -17,7 +17,7 @@
     ITEM_TIER_MULT: [1, 1.6, 2.4], MAX_ITEMS: 3, MAX_ITEM_TIER: 3,
     SYN_THRESHOLDS: [2, 4, 6, 8],
     ORDER_THRESHOLDS: [2, 4, 6],
-    NORMAL_ITEM_DROP: 0.30,
+    NORMAL_ITEM_DROP: 0.30, ITEM_EVERY: 3,
     SAVE_KEY_RUN: 'forja_elemental_v2_run',
     SAVE_KEY_META: 'forja_elemental_v2_meta',
     SAVE_KEY_SETTINGS: 'forja_elemental_v2_settings',
@@ -347,7 +347,7 @@
 
   /* ---------------- MAPA ------------------------------------------------------ */
   const NODE_TYPES = {
-    combate: { name: 'Combate', icon: '⚔️', color: '#94a3b8', desc: 'Horda padrão. Ouro, XP e chance de item.', reward: '🪙 ouro • 📘 XP • 🎁 30% de chance de item ★1' },
+    combate: { name: 'Combate', icon: '⚔️', color: '#94a3b8', desc: 'Horda padrão. Ouro, XP e chance de item.', reward: '🪙 ouro • 📘 XP • 🎁 item ★1 a cada 3 combates' },
     elite: { name: 'Elite', icon: '💀', color: '#f87171', desc: 'Comandante com afixos. Relíquia garantida.', reward: '🪙 ouro +30 • 📘 XP ×1,45 • 🎁 item ★1 garantido • 🏺 escolha de 1 relíquia' },
     chefe: { name: 'Chefe', icon: '👑', color: '#facc15', desc: 'Guardião do Ato com mecânicas próprias.', reward: '🪙 ouro +60 • 📘 XP ×1,75 • 🎁 item ★2 para cada jogador • 🏺 relíquia (rara/lendária) • ❤️ Cidadela +25 • próximo Ato' },
     forja: { name: 'Forja Rúnica', icon: '⚒️', color: '#fbbf24', desc: 'Escolha 1 de 3 itens ou aprimore um item.', reward: '🎁 1 item à escolha (★2 possível no Ato III+) ou +1 tier num item seu' },
@@ -421,7 +421,7 @@
       elite: [0.65, 2.0, 3.2, 5.2],
       chefe: [1.2, 2.6, 2.4, 6.0]
     },
-    kMin: 0.6, kMax: 4.5, ascPer: 0.08, coopMult: [1.5, 2.2, 2.6, 2.8],
+    diff: 0.72, kMin: 0.4, kMax: 7, ascPer: 0.08, coopMult: [1.5, 2.2, 2.6, 2.8],
     threatMin: -3, threatMax: 10, threatPer: 0.07, rewardPer: 0.06
   };
 
@@ -529,7 +529,7 @@
     lider: { id: 'lider', name: 'Líder Nato', icon: '🎖️', rare: true, desc: 'Inspira aliados próximos: +6% de dano para quem estiver a até 2,5 casas.', mods: { inspire: 0.06 } }
   };
   const QUARTEL = {
-    slots: 5, rerollBase: 2, rerollStep: 1, contractMult: 1.5,
+    slots: 5, rerollBase: 2, rerollStep: 1, contractMult: 1,
     quality: [
       { id: 0, name: 'Recruta', color: '#94a3b8', level: 1, costMult: 1.0, traitChance: 0.5 },
       { id: 1, name: 'Veterano', color: '#60a5fa', level: 2, costMult: 1.75, traitChance: 0.8 },
@@ -539,5 +539,13 @@
     synergyBias: 0.3
   };
 
-  FE.Data = { DOCTRINES, COUNTERS, OBJECTIVES, TACTICS, TRAITS, QUARTEL, SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
+  /* Defesas de veterano dos inimigos por Ato (I..IV): vida extra, armadura,
+     resistência mágica (reduz dano mágico) e resistência elemental (reduz
+     queimadura, explosões, ricochete e dano verdadeiro). Elites e chefes
+     recebem o bônus multiplicado. */
+  const ENEMY_DEFENSE = {
+    hp: [0.20, 0.40, 0.60, 0.85], armor: [0.15, 0.30, 0.45, 0.60], armorFlat: [4, 10, 18, 28],
+    magic: [0.06, 0.12, 0.18, 0.24], elem: [0.10, 0.18, 0.26, 0.34], eliteMult: 1.2, bossMult: 1.35, fixedK: 0.4
+  };
+  FE.Data = { ENEMY_DEFENSE, DOCTRINES, COUNTERS, OBJECTIVES, TACTICS, TRAITS, QUARTEL, SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);
