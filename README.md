@@ -1,4 +1,4 @@
-# Forja Elemental 3.0
+# Forja Elemental 3.1
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,6 +18,13 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 3.1 — Arte e clareza
+- **`js/art.js`**: emblemas vetoriais próprios (14 arquétipos, 5 invocações, 4 chefes) usados no canvas (`FE.Art.draw` via Path2D) e no DOM (`FE.Art.svg`/`FE.Art.medal`). Para trocar a arte de uma classe basta editar as camadas em `ICONS`.
+- **Miniaturas** no tabuleiro: base metálica, disco na cor da classe, espinhos para inimigos (dourados em elites e chefes), selo de nível, barras arredondadas, estados desenhados (atordoado, queimando, congelado) e fantasmas com a mesma arte.
+- **Tabuleiro mais limpo**: sem textos sobrepostos, grade em pontos, divisória luminosa.
+- **Briefing compacto**: doutrina / inteligência / objetivo viram 3 chips expansíveis; poder e recompensas numa linha; táticas compactas.
+- Sinergias inativas viram uma fileira de ícones; Inspetor com retrato; **Modo Foco** (tecla F).
 
 ## Novidades da 3.0 — Mesa de Guerra
 - **Doutrinas inimigas** (`D.DOCTRINES`, `E.generateHorde(..., doctrineId)`): composição, formação, emboscada e modificadores por horda; `tune`/`coopTune` calibram a escala adaptativa.

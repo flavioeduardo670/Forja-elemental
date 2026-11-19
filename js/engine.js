@@ -689,7 +689,7 @@
       return;
     }
     v.dead = true; v.hp = 0;
-    if (c.fxOn) c.fx.ghosts.push({ x: v.x, y: v.y, symbol: v.symbol, color: v.color, life: 0.9, maxLife: 0.9 });
+    if (c.fxOn) c.fx.ghosts.push({ x: v.x, y: v.y, symbol: v.symbol, color: v.color, archetypeId: v.archetypeId, isBoss: v.isBoss, isSummon: v.isSummon, team: v.team, life: 0.9, maxLife: 0.9 });
     if (v.isBoss && c.fxOn) c.fx.shake = 14;
     for (const n of c.units) if (!n.dead && n.skills.ne_colheita) n.stats.ap = Math.round(n.stats.ap * (1 + 0.04 * n.skills.ne_colheita));
     particles(c, v.x, v.y, v.color, 16); shock(c, v.x, v.y, 1.0, v.color);

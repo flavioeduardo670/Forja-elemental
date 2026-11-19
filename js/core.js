@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
   const FE = root.FE = root.FE || {};
-  FE.VERSION = '3.0.0';
+  FE.VERSION = '3.1.0';
 
   FE.util = {
     clamp: (v, a, b) => Math.max(a, Math.min(b, v)),

@@ -53,6 +53,7 @@
     else if (k === 'a' && !UI.modalKind) G.autoArrange();
     else if (k === 'e' && (!UI.modalKind || UI.modalKind === 'evo')) { if (UI.modalKind === 'evo') UI.closeModal(); else UI.openEvo(); }
     else if (k === 'm' && (!UI.modalKind || UI.modalKind === 'map')) { if (UI.modalKind === 'map') UI.closeModal(); else UI.showMap(); }
+    else if (k === 'f' && !UI.modalKind) UI.toggleFocus();
     else if (k === 'c' && (!UI.modalKind || UI.modalKind === 'codex')) { if (UI.modalKind === 'codex') UI.closeModal(); else UI.openCodex(null, null); }
   });
 

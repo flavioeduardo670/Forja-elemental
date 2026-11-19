@@ -916,7 +916,7 @@
     const finishUnits = () => {
       rewards.units = r.board.map(u => {
         const b = snap.get(u.id) || { level: u.level, xp: 0 };
-        return { id: u.id, name: u.name, symbol: G.arch(u).symbol, color: G.arch(u).color, owner: u.owner || 0,
+        return { id: u.id, archetypeId: u.archetypeId, quality: u.quality || 0, name: u.name, symbol: G.arch(u).symbol, color: G.arch(u).color, owner: u.owner || 0,
           lvlBefore: b.level, xpBefore: b.xp, nextBefore: G.xpToNext(b.level), lvlAfter: u.level, xpAfter: u.xp, nextAfter: G.xpToNext(u.level), pe: u.evoPoints };
       });
     };

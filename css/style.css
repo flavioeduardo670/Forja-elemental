@@ -654,3 +654,107 @@ html { background: #09080d; }
   .left-col, .right-col { position: static; max-height: none; }
   .left-col .synergy-list, .left-col .combat-log { max-height: 420px; }
 }
+
+/* =====================================================================
+   v3.1 — Arte das unidades e layout mais limpo
+   ===================================================================== */
+/* Medalhões (mesma arte do tabuleiro) */
+.medal { --mc: #64748b; --sz: 40px; position: relative; display: inline-flex; align-items: center; justify-content: center; width: var(--sz); height: var(--sz); border-radius: 50%; flex-shrink: 0; vertical-align: middle;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mc) 55%, #fff) 0%, var(--mc) 45%, color-mix(in srgb, var(--mc) 35%, #000) 100%);
+  box-shadow: 0 0 0 calc(var(--sz) * .07) #c9953f, 0 0 0 calc(var(--sz) * .07 + 1px) #3a250c, 0 calc(var(--sz) * .08) calc(var(--sz) * .2) rgba(0,0,0,.6), inset 0 calc(var(--sz) * -.12) calc(var(--sz) * .2) rgba(0,0,0,.45); }
+.medal::after { content: ''; position: absolute; left: 16%; top: 9%; width: 52%; height: 26%; border-radius: 50%; background: rgba(255,255,255,.22); transform: rotate(-22deg); pointer-events: none; }
+.medal .art { width: 74%; height: 74%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.55)); }
+.medal.q1 { box-shadow: 0 0 0 calc(var(--sz) * .07) #60a5fa, 0 0 0 calc(var(--sz) * .07 + 1px) #0b2545, 0 0 calc(var(--sz) * .35) -2px #60a5fa, inset 0 calc(var(--sz) * -.12) calc(var(--sz) * .2) rgba(0,0,0,.45); }
+.medal.q2 { box-shadow: 0 0 0 calc(var(--sz) * .08) #fbbf24, 0 0 0 calc(var(--sz) * .08 + 1px) #5b3108, 0 0 calc(var(--sz) * .45) -2px #fbbf24, inset 0 calc(var(--sz) * -.12) calc(var(--sz) * .2) rgba(0,0,0,.45); }
+.medal.enemy { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mc) 60%, #000) 0%, color-mix(in srgb, var(--mc) 30%, #000) 60%, #0b0710 100%); box-shadow: 0 0 0 calc(var(--sz) * .07) #991b1b, 0 0 0 calc(var(--sz) * .07 + 1px) #2a0606, 0 4px 10px rgba(0,0,0,.6); }
+.medal.boss { box-shadow: 0 0 0 calc(var(--sz) * .08) #f59e0b, 0 0 calc(var(--sz) * .5) -4px #f59e0b; }
+.medal.xs { --sz: 22px; } .medal.sm { --sz: 30px; } .medal.lg { --sz: 64px; } .medal.xl { --sz: 58px; }
+.medal.xs::after { display: none; }
+.h-medal { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Banco */
+.bench-slot.occupied { background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.05), rgba(0,0,0,.3)); }
+.bench-medal { --sz: 72%; width: 66%; height: 66%; }
+.bench-slot .medal { --sz: 44px; width: 66%; height: 66%; }
+
+/* Inspetor */
+.insp-hero { display: flex; align-items: center; gap: 12px; }
+.insp-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.insp-id h3 { font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.insp-role { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 700; }
+.unit-header-card { background: linear-gradient(160deg, rgba(255,255,255,.04), rgba(0,0,0,.15)); border-color: rgba(255,255,255,.07); }
+.stats-grid { gap: 4px; } .stat-cell { background: rgba(0,0,0,.22); border-color: rgba(255,255,255,.05); }
+
+/* Sinergias: só o que importa */
+.syn-idle { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 0 4px; }
+.syn-dot { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); cursor: help; filter: grayscale(.6); opacity: .75; transition: .15s; }
+.syn-dot:hover { filter: none; opacity: 1; border-color: var(--el-color); }
+.syn-empty { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; padding: 8px 10px; border: 1px dashed rgba(255,255,255,.1); border-radius: 10px; }
+
+/* Briefing compacto */
+.war-table { gap: 8px; }
+.board-topbar .chip { background: rgba(255,255,255,.03); }
+.intel-panel { display: none; }
+.bf-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; }
+.bf-chip { --bc: #94a3b8; display: flex; align-items: center; gap: 9px; text-align: left; padding: 7px 10px; border-radius: 11px; cursor: pointer; font: inherit; color: var(--text-secondary);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bc) 12%, transparent), rgba(255,255,255,.015)); border: 1px solid color-mix(in srgb, var(--bc) 32%, transparent); transition: .15s; min-width: 0; }
+.bf-chip:hover, .bf-chip.open { border-color: var(--bc); background: linear-gradient(135deg, color-mix(in srgb, var(--bc) 20%, transparent), rgba(255,255,255,.02)); }
+.bf-chip.alert { box-shadow: 0 0 18px -8px var(--bc); } .bf-chip.dim { opacity: .7; }
+.bf-ic { width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(0,0,0,.35); }
+.bf-ic .art { width: 24px; height: 24px; } .bf-emo { font-size: 17px; }
+.bf-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; flex: 1; }
+.bf-kick { font-size: 8.5px; text-transform: uppercase; letter-spacing: 1.1px; font-weight: 900; color: color-mix(in srgb, var(--bc) 85%, #fff); }
+.bf-txt b { font-size: 12px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bf-txt small { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bf-car { color: var(--text-muted); font-size: 11px; }
+.bf-detail { --bc: #94a3b8; margin-top: 6px; padding: 9px 12px; border-radius: 11px; background: rgba(0,0,0,.3); border-left: 3px solid var(--bc); font-size: 12px; line-height: 1.5; color: var(--text-secondary); animation: rcIn .2s ease both; }
+.bf-detail b { color: var(--text-primary); } .bf-good { color: #86efac; font-weight: 800; } .bf-why { color: #fca5a5; }
+.bf-ctr + .bf-ctr { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.06); }
+.bf-arch { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
+
+/* Linha de status: poder + recompensas */
+.status-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.power-panel { flex: 1 1 300px; display: none; align-items: center; gap: 10px; padding: 6px 10px; margin: 0; border-radius: 10px; background: rgba(0,0,0,.25); border: 1px solid var(--border-subtle); }
+.pp-num { font-size: 12.5px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pp-num.you { color: #6ee7b7; } .pp-num.foe { color: #fca5a5; }
+.power-panel .pp-mid { flex: 1; cursor: help; }
+.power-panel .pp-bar { position: relative; height: 7px; }
+.pp-tick { position: absolute; top: -3px; width: 2px; height: 13px; background: #fff; border-radius: 2px; transform: translateX(-1px); box-shadow: 0 0 6px #fff; }
+.pp-diff { --dc: #fbbf24; font-size: 10.5px; font-weight: 900; text-transform: uppercase; letter-spacing: .8px; color: var(--dc); padding: 2px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--dc) 50%, transparent); background: color-mix(in srgb, var(--dc) 12%, transparent); white-space: nowrap; }
+.reward-strip { flex: 1 1 300px; display: none; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px; border-radius: 10px; background: rgba(0,0,0,.25); border: 1px solid var(--border-subtle); font-size: 11.5px; color: var(--text-secondary); cursor: help; margin: 0; }
+.reward-strip b { color: var(--text-primary); }
+.rs-lbl { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 5px; }
+.rs-lbl.win { background: rgba(251,191,36,.15); color: #fde68a; } .rs-lbl.lose { background: rgba(239,68,68,.15); color: #fca5a5; }
+.rs-hl { color: #e9d5ff; } .rs-sep { flex: 1; }
+
+/* Táticas compactas */
+.tactic-bar { padding: 3px; gap: 3px; }
+.tactic { min-width: 0; padding: 6px 8px; font-size: 11px; }
+.tactic em { font-style: normal; }
+@media (max-width: 1400px) { .tactic:not(.active) em { display: none; } .tactic { flex: 0 0 auto; padding: 6px 12px; } .tactic.active { flex: 1; } }
+
+/* Quartel mais limpo */
+.rq-card { gap: 7px; padding: 10px 11px 11px; }
+.rq-art { height: 76px; }
+.rq-art::before { display: none; }
+.rq-art .medal { transition: transform .25s; }
+.rq-card:hover .rq-art .medal { transform: scale(1.08) rotate(-4deg); }
+.rq-lvl { bottom: 2px; left: calc(50% + 18px); }
+.rq-role { margin-top: -5px; letter-spacing: .6px; }
+.rq-stats { grid-template-columns: 1fr 1fr; column-gap: 10px; padding: 6px 8px; }
+.sb { grid-template-columns: 12px 1fr; font-size: 10px; }
+.con-card .medal { margin-bottom: 4px; }
+.bench-slot .bench-trait { font-size: 10px; }
+.xp-name { display: inline-flex; align-items: center; gap: 6px; }
+.unit-tab-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Topo e cromo mais silenciosos */
+.board-topbar { gap: 5px; }
+.panel::before, .war-table::before, .dock > div::before { opacity: .45; }
+.left-col .panel-header, .synergy-card .synergy-desc { font-size: 10.5px; }
+.synergy-card.compact .synergy-desc { display: none; }
+/* Modo Foco */
+body.focus-mode .left-col, body.focus-mode .right-col, body.focus-mode .dock { display: none; }
+body.focus-mode .workspace { grid-template-columns: minmax(0, 980px); justify-content: center; }
+body.focus-mode .war-table > * { max-width: 900px; } body.focus-mode .canvas-container { max-width: 860px; }
+.icon-btn.active { border-color: var(--gold); background: rgba(233,162,59,.15); }
