@@ -1,0 +1,111 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27863e85ecc999746820a978b03110fa, type: 3}
+  m_Name: ModelCatalog
+  m_EditorClassIdentifier: ForjaElemental.Game::ForjaElemental.Game.ModelCatalog
+  entries:
+  - key: b_arconte
+    prefab: {fileID: 6969915671813724061, guid: 67b6e183010111a4ba210421ef302797, type: 3}
+  - key: b_colosso
+    prefab: {fileID: 4632603929960445726, guid: 456fd787fb3d96448861dac4bb631bf4, type: 3}
+  - key: b_ferreiro
+    prefab: {fileID: 4277893770545218085, guid: 1f087a02402085c49bb1383d877d7ad9, type: 3}
+  - key: b_leviata
+    prefab: {fileID: 4436098250123170952, guid: de9030e922cc5cb428387802ec540466, type: 3}
+  - key: cidade
+    prefab: {fileID: 6789775351448747360, guid: 6f44501f0725c284192974f211b5e792, type: 3}
+  - key: forte
+    prefab: {fileID: 7513714713249894102, guid: 1db7a4d2907b4a24fba0c95ca8ce72d8, type: 3}
+  - key: torre
+    prefab: {fileID: 5161685710497752670, guid: ba2d1be2285e0014ebc696819cbaea9d, type: 3}
+  - key: s_avatar_agua
+    prefab: {fileID: 8075169497505598410, guid: 0fe5b07a37ae10b458b9f3ec849e9ccb, type: 3}
+  - key: s_avatar_ar
+    prefab: {fileID: 6387009324953030185, guid: 065c7ed00216a454a83a0fdd9ce43aa2, type: 3}
+  - key: s_avatar_fogo
+    prefab: {fileID: 7910529651670478389, guid: f945b3e52b07465429120481148ad996, type: 3}
+  - key: s_avatar_lunar
+    prefab: {fileID: 3790348376653182343, guid: ce536b487f254324a9d195aa2f525a83, type: 3}
+  - key: s_avatar_pedra
+    prefab: {fileID: 7544800470333153552, guid: dfb646875248f6c4b94dc1a951097501, type: 3}
+  - key: s_avatar_solar
+    prefab: {fileID: 1652731086684460656, guid: 0fbc2b82a03058145bfba62ddaf05fb7, type: 3}
+  - key: s_cria_e
+    prefab: {fileID: 7223470845609414069, guid: 57bccb6c5e95be64e9a8d5421365b9a5, type: 3}
+  - key: s_esqueleto_e
+    prefab: {fileID: 1834258960277899562, guid: 92e254ad30c583a41a219fb9eeb77ea5, type: 3}
+  - key: s_esqueleto_p
+    prefab: {fileID: 4724738018374098006, guid: 16624c816072cfe4b813256faa9d60f4, type: 3}
+  - key: s_lobo_e
+    prefab: {fileID: 5409817561118681257, guid: 814177d58baf8bf48848d65a57f91ab6, type: 3}
+  - key: s_lobo_p
+    prefab: {fileID: 3057866030808215066, guid: c368998d5d9db464394729571afd3808, type: 3}
+  - key: s_torreta_e
+    prefab: {fileID: 6634274052648488402, guid: f26c2de6b40920640a9298ea5ddd69ba, type: 3}
+  - key: s_torreta_p
+    prefab: {fileID: 9067233984830599142, guid: 1a4c2ed8ef709724199cf27a5e537e23, type: 3}
+  - key: alquimista_e
+    prefab: {fileID: 1115421167450742791, guid: aaef327d8a479724bb9b1c86b7a5ded2, type: 3}
+  - key: alquimista_p
+    prefab: {fileID: 6986926049854165846, guid: 0aac095c4dc7b0a429a7678a14b1af9f, type: 3}
+  - key: arcanista_e
+    prefab: {fileID: 9023923914838030857, guid: 52a0afc1b98bb2f4390fc190ebee4057, type: 3}
+  - key: arcanista_p
+    prefab: {fileID: 1659143520877354613, guid: c0b064b71ca365743bf8889cca564f83, type: 3}
+  - key: artifice_e
+    prefab: {fileID: 8693482190371596082, guid: 91f57c8df1b288b4fbac84eb8cff6173, type: 3}
+  - key: artifice_p
+    prefab: {fileID: 2985123163874220362, guid: 9f82dcadbc234ae44b837a61b230fbf5, type: 3}
+  - key: bardo_e
+    prefab: {fileID: 1230272055553218050, guid: 11c7eb5dd1f57e342a7e5aa262b15cab, type: 3}
+  - key: bardo_p
+    prefab: {fileID: 9100553166087307808, guid: 08ee085ee9ded4c43a4ab9e5bff033d3, type: 3}
+  - key: berserker_e
+    prefab: {fileID: 4658528267643082522, guid: 018080f6c3ebf204ea273cff098521d9, type: 3}
+  - key: berserker_p
+    prefab: {fileID: 3372530281875218051, guid: c9b5cbb8a106e7441b684c11c3767aed, type: 3}
+  - key: cacador_e
+    prefab: {fileID: 3833768652230596564, guid: 93f5cf75f8a06674f805040fbbea8090, type: 3}
+  - key: cacador_p
+    prefab: {fileID: 114169727757605894, guid: fd10a793e9ade0c44a5c14e67a4476a2, type: 3}
+  - key: clerigo_e
+    prefab: {fileID: 713080178347862124, guid: 05942961ffe41194ab7e7c49ec0804ae, type: 3}
+  - key: clerigo_p
+    prefab: {fileID: 5152681362430007370, guid: 93332d481a2c55d429c655c183dc21a0, type: 3}
+  - key: druida_e
+    prefab: {fileID: 7166224696066205838, guid: 2228fba48a68e2c4a9a74a3379ebc347, type: 3}
+  - key: druida_p
+    prefab: {fileID: 2298709264768902791, guid: 425803a109a44814b939ad7646d7c4aa, type: 3}
+  - key: lanceiro_e
+    prefab: {fileID: 9182399063046207796, guid: 1aa1c0f7edb712046a0a863019b2a00a, type: 3}
+  - key: lanceiro_p
+    prefab: {fileID: 5923268382837974138, guid: 5a69d35a1930b134d89951d1ac27fa02, type: 3}
+  - key: monge_e
+    prefab: {fileID: 5003170537426152522, guid: 1de0391c12ad36345a7025050feae956, type: 3}
+  - key: monge_p
+    prefab: {fileID: 5583487864227566975, guid: 335a4698f4e770147866d3e1b1919817, type: 3}
+  - key: necromante_e
+    prefab: {fileID: 4053096542201805777, guid: 401adbb2d35eb864daf990af2cbd54d2, type: 3}
+  - key: necromante_p
+    prefab: {fileID: 8015665323059499566, guid: 4a276f7c61ee4284b8de310034602d44, type: 3}
+  - key: paladino_e
+    prefab: {fileID: 8620777814464042911, guid: fbfbacc7448a81743948420c58c922c9, type: 3}
+  - key: paladino_p
+    prefab: {fileID: 882488364403265866, guid: 5791a3dc021c27147b0ce371b1ecf168, type: 3}
+  - key: sombra_e
+    prefab: {fileID: 5841562890166023995, guid: ef269ffacc81e90449fc8d5e603ce2cf, type: 3}
+  - key: sombra_p
+    prefab: {fileID: 5908212663053665780, guid: 7be00e9cd27f4a040b1e12874948394b, type: 3}
+  - key: vanguarda_e
+    prefab: {fileID: 8919219519627540329, guid: eacba40c3c4a2ac45883d1f62e38c1c5, type: 3}
+  - key: vanguarda_p
+    prefab: {fileID: 7832361321676066801, guid: b0776e0eac86fb146a2b2f5e81d36f7b, type: 3}

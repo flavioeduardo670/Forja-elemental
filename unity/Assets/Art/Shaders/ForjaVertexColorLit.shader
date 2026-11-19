@@ -14,6 +14,8 @@ Shader "ForjaElemental/VertexColorLit"
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
+        // as malhas vêm do construtor do gl3d.js, que não garante a ordem dos triângulos
+        Cull Off
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -78,6 +80,8 @@ Shader "ForjaElemental/VertexColorLit"
                 #endif
                 half em = i.color.a;
                 float3 n = normalize(i.normalWS);
+                // face de trás: vira a normal para iluminar como a da frente
+                if (dot(n, GetWorldSpaceViewDir(i.positionWS)) < 0) n = -n;
                 Light main = GetMainLight(TransformWorldToShadowCoord(i.positionWS));
                 half ndl = saturate(dot(n, main.direction));
                 half3 light = main.color * ndl * main.shadowAttenuation * main.distanceAttenuation;

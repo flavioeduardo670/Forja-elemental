@@ -16,7 +16,23 @@ Projeto Unity (URP 3D, Unity 6000.6.10f1) do Forja Elemental.
     escala de poder, inteligência inimiga, objetivos, recompensas, eventos, relíquias e fila de escolhas.
     A interface ouve `OnLog`, `OnToast`, `OnSfx`, `OnChanged`, `OnOpenEvo`.
   - `ExpeditionSim.cs` — simulador headless com a mesma IA de `tests/sim.js`.
+  - `SimpleAi.cs` — a IA de `tests/sim.js` (usada pelo simulador e pelo botão **Auto** do jogo).
+- `Assets/Scripts/Game/` — o jogo (assembly `ForjaElemental.Game`):
+  - `GameController.cs` — liga a expedição ao tabuleiro, bonecos, câmera, HUD e save.
+  - `TerrainBuilder.cs` / `MeshKit.cs` — tabuleiro 16×14 e entorno do Ato, gerados em tempo real (port do `gl3d.js`).
+  - `BoardView.cs`, `UnitView.cs` (Animator dirigido pelo combate), `CameraRig.cs` (câmera orbital), `CombatFx.cs`.
+  - `GameHud.cs` + `Assets/UI/Game/GameHud.uxml/.uss` — HUD em UI Toolkit com painéis recolhíveis.
+  - `SaveSystem.cs` — expedição e meta em JSON (`Application.persistentDataPath`).
+- `Assets/Scenes/Jogo.unity` — cena jogável (refeita por **Forja Elemental ▸ Montar cena do jogo**).
 - `Assets/Scripts/Editor/SimulatorMenu.cs` — menu **Forja Elemental ▸ Simular expedições** e entrada de linha de comando.
+
+## Jogar
+Abra `Assets/Scenes/Jogo.unity` e aperte Play. Controles: clique numa unidade sua e depois numa casa
+para posicionar; botão direito (ou Shift) + arrastar gira a câmera; roda do mouse dá zoom; setas
+giram/inclinam; **H** tela ampla; **M** mapa; **Espaço** pausa; **Esc** limpa a seleção.
+
+![Preparação](../docs/unity-preparacao.png)
+![Combate](../docs/unity-combate.png)
 - `Assets/Resources/Data/forja-data.json` — conteúdo exportado de `js/data.js`.
 - `Assets/Tests/EditMode/` — testes de paridade com o motor JS (`Golden/*.json`).
 
@@ -28,6 +44,7 @@ node tools/export-data.js      # atualiza forja-data.json
 node tools/make-golden.js      # regrava os valores de referência do motor
 node tools/sim-trace.js        # regrava expedições passo a passo e resumos do sim.js
 unity test unity --mode EditMode
+unity test unity --mode PlayMode   # abre a cena, joga uma sala com a IA e grava capturas em Logs/Shots
 ```
 
 Os testes comparam RNG, atributos, mapa, terreno, hordas, combates completos, expedições inteiras

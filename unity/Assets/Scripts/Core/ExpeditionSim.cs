@@ -7,7 +7,7 @@ using System.Text;
 namespace ForjaElemental.Core
 {
     /// <summary>
-    /// Simulação headless de expedições com a mesma IA simples de tests/sim.js,
+    /// Simulação headless de expedições com a mesma IA simples de tests/sim.js (ver SimpleAi),
     /// para validar regras e medir balanceamento no C#.
     /// </summary>
     public sealed class ExpeditionSim
@@ -39,102 +39,30 @@ namespace ForjaElemental.Core
             }
         }
 
-        static readonly string[] Order = { "vanguarda", "arcanista", "clerigo", "cacador", "paladino", "necromante", "bardo", "monge", "alquimista", "berserker", "druida", "lanceiro", "artifice", "sombra" };
-        static readonly Dictionary<string, string> Tact = new Dictionary<string, string>
-        {
-            ["emboscada"] = "falange", ["sacerdocio"] = "retaguarda", ["artilharia"] = "retaguarda", ["ritual"] = "assalto",
-            ["furia"] = "falange", ["enxame"] = "assalto", ["muralha"] = "foco"
-        };
-        static readonly HashSet<string> FrontPrefs = new HashSet<string> { "front", "mid", "flank" };
-
-        readonly GameData d;
         public readonly Expedition G;
-        readonly bool smart;
-        readonly string fixTactic;
+        public readonly SimpleAi Ai;
 
         /// <summary>Chamado após cada passo do laço principal (para traços de paridade).</summary>
         public Action<Expedition> OnStep;
 
         public ExpeditionSim(GameData data, string ai = null)
         {
-            d = data;
             G = new Expedition(data);
             G.Meta.MaxAscension = 5; G.Meta.SeenTutorial = true;
-            smart = ai != "dumb";
-            fixTactic = ai != null && data.Tactics.ContainsKey(ai) ? ai : null;
-        }
-
-        void AiPrepPlayer(int pid)
-        {
-            var r = G.Run; r.Active = pid; var p = G.Me();
-            int cap = G.CapPerPlayer();
-            int guard = 0;
-            while (guard++ < 14)
-            {
-                int mine = G.BoardOf(pid).Count;
-                if (mine >= G.FieldLimit(p)) { if (p.TeamLimit < Math.Min(cap, 7)) G.SetTeamLimit(p.TeamLimit + 1); else break; }
-                var mineU = G.UnitsOf(pid);
-                int nf = mineU.Count(u => FrontPrefs.Contains(d.Archetypes[u.ArchetypeId].Pref));
-                bool wantFront = nf < Math.Ceiling((mineU.Count + 1) * 0.4);
-                var have = new HashSet<string>(mineU.Select(u => u.ArchetypeId));
-                var oc = new Dictionary<string, int>();
-                foreach (var u in G.AllUnits()) foreach (var o in d.Archetypes[u.ArchetypeId].Orders) oc[o] = (oc.TryGetValue(o, out var v) ? v : 0) + 1;
-                double Score(string arch) =>
-                    d.Archetypes[arch].Orders.Sum(o => Math.Min(3, oc.TryGetValue(o, out var v) ? v : 0)) * 1.2 + 0 * 1.5
-                    + ((FrontPrefs.Contains(d.Archetypes[arch].Pref) == wantFront) ? 2.5 : 0) + (have.Contains(arch) ? 0.3 : 0);
-                string best = Order.OrderByDescending(Score).First();
-                if (p.Gold >= G.ContractCost(best)) { G.Buy(best); continue; }
-                break;
-            }
-            while (p.Bag.Count > 0 && G.BoardOf(pid).Any(u => u.Items.Count < 3)) { var u = G.BoardOf(pid).First(x => x.Items.Count < 3); G.Equip(0, u.Id); }
-            foreach (var u in G.UnitsOf(pid))
-                while (u.EvoPoints > 0)
-                {
-                    var a = d.Archetypes[u.ArchetypeId];
-                    string sk = a.Skills.FirstOrDefault(s => u.Skills.Get(s) < 3 && d.Skills[s].Type == "ativa" && u.Skills.Get(s) != 0) ?? a.Skills.FirstOrDefault(s => u.Skills.Get(s) < 3);
-                    if (sk != null && u.Level % 2 == 0) G.UpgradeSkill(u.Id, sk);
-                    else G.AddElement(u.Id, new[] { "fogo", "pedra", "agua" }[int.Parse(u.Id) % 3]);
-                }
-            G.AutoArrange();
-        }
-
-        void AiPrep()
-        {
-            if (G.Run.Phase == "PREP")
-            {
-                if (fixTactic != null) G.SetTactic(fixTactic);
-                else if (smart) G.SetTactic(G.Run.Doctrine != null && Tact.TryGetValue(G.Run.Doctrine, out var t) ? t : "equilibrio");
-            }
-            for (int i = 0; i < G.Coop(); i++) AiPrepPlayer(i);
-            G.Run.Active = 0;
+            Ai = new SimpleAi(G, ai);
         }
 
         /// <summary>Joga uma expedição inteira. Lança exceção se um combate não terminar.</summary>
-        public RunResult PlayRun(string seed, int ascension, int players, string scaling,
-            OrderedDict<int[]> docStats = null)
+        public RunResult PlayRun(string seed, int ascension, int players, string scaling, OrderedDict<int[]> docStats = null)
         {
             G.NewRun(seed, ascension, players, scaling: scaling);
             OnStep?.Invoke(G);
             int steps = 0;
             while (G.Run.Phase != "END" && steps++ < 600)
             {
-                var r = G.Run;
-                if (r.Phase == "CHOICE")
+                string doc = Ai.Step();
+                if (G.Run.Phase == "COMBAT")
                 {
-                    var p = G.CurrentPending();
-                    if (p.Kind == "shop" || p.Kind == "report" || p.Kind == "story") G.SkipPending();
-                    else { int idx = p.Options.FindIndex(o => G.OptionAffordable(o)); if (idx >= 0) G.ResolveOption(idx); else G.SkipPending(); }
-                }
-                else if (r.Phase == "MAP")
-                {
-                    AiPrep();
-                    var av = G.AvailableNodes();
-                    var pick = av.FirstOrDefault(n => n.Type == "acampamento" && r.CitadelHp < 60) ?? av.FirstOrDefault(n => n.Type != "elite") ?? av[0];
-                    G.ChooseNode(pick.Id);
-                }
-                else if (r.Phase == "PREP")
-                {
-                    AiPrep(); string doc = r.Doctrine ?? "chefe"; G.StartCombat();
                     double t = 0;
                     while (G.Run.Phase == "COMBAT" && t < 200) { G.Tick(0.05); t += 0.05; }
                     if (t >= 200) throw new Exception("combate não terminou");
@@ -160,7 +88,7 @@ namespace ForjaElemental.Core
         {
             var sim = new ExpeditionSim(data, ai);
             var results = new List<RunResult>();
-            var sum = new Summary { Ai = sim.fixTactic ?? (sim.smart ? "smart" : "dumb"), Mode = scaling, Runs = runs, Asc = asc, Players = players };
+            var sum = new Summary { Ai = sim.Ai.FixTactic ?? (sim.Ai.Smart ? "smart" : "dumb"), Mode = scaling, Runs = runs, Asc = asc, Players = players };
             for (int i = 0; i < runs; i++)
             {
                 try { results.Add(sim.PlayRun($"SIM{i}P{players}", asc, players, scaling, sum.Doc)); }

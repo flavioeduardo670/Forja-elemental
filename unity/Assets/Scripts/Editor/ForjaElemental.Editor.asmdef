@@ -2,7 +2,8 @@
     "name": "ForjaElemental.Editor",
     "rootNamespace": "ForjaElemental.EditorTools",
     "references": [
-        "ForjaElemental.Core"
+        "ForjaElemental.Core",
+        "ForjaElemental.Game"
     ],
     "includePlatforms": [
         "Editor"

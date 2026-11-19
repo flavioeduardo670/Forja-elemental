@@ -1,0 +1,72 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="GameHud.uss" />
+    <ui:VisualElement name="root" class="game-root" picking-mode="Ignore">
+        <ui:VisualElement name="worldLayer" class="world-layer" picking-mode="Ignore" />
+        <ui:VisualElement name="topBar" class="top-bar">
+            <ui:Label name="roomLabel" class="top-title" />
+            <ui:Label name="citadelLabel" class="chip chip--citadel" />
+            <ui:Label name="goldLabel" class="chip chip--gold" />
+            <ui:Label name="threatLabel" class="chip" />
+            <ui:VisualElement name="playerTabs" class="player-tabs" />
+            <ui:VisualElement class="spacer" picking-mode="Ignore" />
+            <ui:Button name="mapButton" text="Mapa" class="top-btn" />
+            <ui:Button name="speedButton" text="Vel. 1×" class="top-btn" />
+            <ui:Button name="pauseButton" text="Pausar" class="top-btn" />
+            <ui:Button name="autoButton" text="Auto" class="top-btn" />
+            <ui:Button name="layoutButton" text="Tela ampla (H)" class="top-btn" />
+            <ui:Button name="camButton" text="Câmera" class="top-btn" />
+            <ui:Button name="menuButton" text="Menu" class="top-btn" />
+        </ui:VisualElement>
+        <ui:VisualElement name="mainRow" class="main-row" picking-mode="Ignore">
+            <ui:VisualElement name="leftPanel" class="panel side-panel">
+                <ui:VisualElement class="panel-header">
+                    <ui:Label name="leftTitle" text="Quartel" class="panel-title" />
+                    <ui:Button name="leftCollapse" text="−" class="collapse-btn" />
+                </ui:VisualElement>
+                <ui:ScrollView name="leftBody" class="panel-body" />
+            </ui:VisualElement>
+            <ui:VisualElement name="center" class="center" picking-mode="Ignore">
+                <ui:VisualElement name="briefing" class="briefing" />
+                <ui:VisualElement name="banner" class="banner hidden" picking-mode="Ignore">
+                    <ui:Label name="bannerLabel" class="banner-label" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="spacer" picking-mode="Ignore" />
+                <ui:VisualElement name="actionBar" class="action-bar" />
+            </ui:VisualElement>
+            <ui:VisualElement name="rightPanel" class="panel side-panel">
+                <ui:VisualElement class="panel-header">
+                    <ui:Label name="rightTitle" text="Exército" class="panel-title" />
+                    <ui:Button name="rightCollapse" text="−" class="collapse-btn" />
+                </ui:VisualElement>
+                <ui:ScrollView name="rightBody" class="panel-body" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="dock" class="panel dock">
+            <ui:VisualElement class="panel-header">
+                <ui:Label name="dockTitle" text="Banco e mochila" class="panel-title" />
+                <ui:Label name="limitLabel" class="dim" />
+                <ui:Button name="limitMinus" text="−" class="collapse-btn" />
+                <ui:Button name="limitPlus" text="+" class="collapse-btn" />
+                <ui:Button name="dockCollapse" text="−" class="collapse-btn" />
+            </ui:VisualElement>
+            <ui:VisualElement name="dockBody" class="dock-body" />
+        </ui:VisualElement>
+        <ui:VisualElement name="toasts" class="toasts" picking-mode="Ignore" />
+        <ui:VisualElement name="mapOverlay" class="overlay hidden">
+            <ui:VisualElement class="modal map-modal">
+                <ui:Label name="mapTitle" class="modal-title" />
+                <ui:Label name="mapSub" class="modal-sub" />
+                <ui:VisualElement name="mapFloors" class="map-floors" />
+                <ui:VisualElement class="modal-footer">
+                    <ui:Button name="mapClose" text="Fechar" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="modalOverlay" class="overlay hidden">
+            <ui:VisualElement name="modal" class="modal" />
+        </ui:VisualElement>
+        <ui:VisualElement name="startOverlay" class="overlay">
+            <ui:VisualElement name="startCard" class="modal start-card" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

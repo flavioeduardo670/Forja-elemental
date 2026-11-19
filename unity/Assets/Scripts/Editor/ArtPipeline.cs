@@ -123,6 +123,20 @@ namespace ForjaElemental.EditorTools
             AssetDatabase.LoadAllAssetRepresentationsAtPath(modelPath).OfType<AnimationClip>()
                 .Where(c => !c.name.StartsWith("__preview__")).GroupBy(c => c.name).ToDictionary(g => g.Key, g => g.First());
 
+        public const string CatalogPath = "Assets/Art/ModelCatalog.asset";
+
+        /// <summary>Catálogo chave → prefab usado pelo jogo (ForjaElemental.Game.ModelCatalog).</summary>
+        public static ForjaElemental.Game.ModelCatalog BuildCatalog()
+        {
+            var cat = AssetDatabase.LoadAssetAtPath<ForjaElemental.Game.ModelCatalog>(CatalogPath);
+            if (cat == null) { cat = ScriptableObject.CreateInstance<ForjaElemental.Game.ModelCatalog>(); AssetDatabase.CreateAsset(cat, CatalogPath); }
+            cat.entries.Clear();
+            foreach (var p in AssetDatabase.FindAssets("t:Prefab", new[] { PrefabsDir }).Select(AssetDatabase.GUIDToAssetPath).OrderBy(p => p))
+                cat.entries.Add(new ForjaElemental.Game.ModelCatalog.Entry { key = Path.GetFileNameWithoutExtension(p), prefab = AssetDatabase.LoadAssetAtPath<GameObject>(p) });
+            EditorUtility.SetDirty(cat);
+            return cat;
+        }
+
         [MenuItem("Forja Elemental/Montar modelos (material, Animator e prefabs)")]
         public static void BuildAll()
         {
@@ -174,6 +188,7 @@ namespace ForjaElemental.EditorTools
                 Object.DestroyImmediate(go);
                 n++;
             }
+            BuildCatalog();
             AssetDatabase.SaveAssets();
             Debug.Log($"[arte] {n} prefab(s) montado(s) em {PrefabsDir}; controller {ControllerPath}.");
         }
