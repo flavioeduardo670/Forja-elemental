@@ -183,6 +183,8 @@
   /* Escolhe o emblema de uma unidade qualquer (roster, inimigo, invocação ou chefe) */
   function keyOf(u) {
     if (!u) return 'unknown';
+    if (u.symbol === '🐓') return 'c_galo';
+    if (u.symbol === '🐔') return 'c_galinha';
     if (u.isBoss) return BOSS_BY_SYMBOL[u.symbol] || 'b_colosso';
     if (u.isSummon) return SUMMON_BY_SYMBOL[u.symbol] || 's_avatar';
     return ICONS[u.archetypeId] ? u.archetypeId : 'unknown';

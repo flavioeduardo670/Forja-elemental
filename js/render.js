@@ -1,5 +1,5 @@
 /* ==========================================================================
-   FORJA ELEMENTAL 4.1 — render.js  (3D em WebGL com câmera orbital)
+   FORJA ELEMENTAL 5.0 — render.js  (3D em WebGL com câmera orbital e bonecos articulados)
    • Terreno e bonecos em 3D (gl3d.js), luz direcional + ambiente, sombras.
    • Câmera: gira (botão direito/do meio arrastando, setas ← →, botões),
      inclina (↑ ↓), aproxima (roda do mouse, + −). Duplo clique no ⌂ reseta.
@@ -10,11 +10,12 @@
 (function (root) {
   'use strict';
   const FE = root.FE, D = FE.Data, C = D.CONFIG, G = FE.Game;
-  const N = C.COLS, P0 = C.PLAYER_ROW;
+  const N = C.COLS, M = C.ROWS, P0 = C.PLAYER_ROW;
   const R = FE.Render = { tile: 52, canvas: null, ctx: null, hover: null, statsCache: new Map(), mode: '3d' };
   const FOV = 34 * Math.PI / 180;
-  const CAM0 = { yaw: Math.PI / 4, pitch: 0.98, dist: 24.5 };
-  const US = 1.32; // escala dos bonecos em relação à casa
+  const CAM0 = { yaw: Math.PI / 4, pitch: 0.9, dist: 25 };
+  const US = 1.18; // escala dos bonecos em relação à casa
+  const ZMIN = 11, ZMAX = 44;
   const cam = R.cam = { yaw: CAM0.yaw, pitch: CAM0.pitch, dist: CAM0.dist, tyaw: CAM0.yaw, tpitch: CAM0.pitch, tdist: CAM0.dist, eye: [0, 0, 0], vp: null, f: 1 / Math.tan(FOV / 2) };
 
   /* ---------------- Inicialização ---------------- */
@@ -106,20 +107,30 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     gl.uniform1f(loc.uGray, o.gray || 0);
     gl.drawArrays(gl.TRIANGLES, 0, m.n);
   }
+  /* Malha de boneco: articulada (partes + pivôs) ou peça única */
   const unitMeshes = new Map();
   function unitMesh(key, team, acc) {
     const k = `${key}|${team}|${acc}`;
     let m = unitMeshes.get(k);
-    if (!m) { m = mesh(FE.GL3D.buildUnit(key, team, acc)); unitMeshes.set(k, m); }
+    if (!m) {
+      const d = FE.GL3D.buildUnit(key, team, acc);
+      if (d instanceof Float32Array) m = { single: mesh(d) };
+      else { m = { parts: {}, pivots: d.pivots }; for (const n in d.parts) m.parts[n] = mesh(d.parts[n]); }
+      unitMeshes.set(k, m);
+    }
     return m;
   }
+  const structMeshes = new Map();
+  function structMesh(kind) { let m = structMeshes.get(kind); if (!m) { m = mesh(FE.GL3D.buildStructure(kind)); structMeshes.set(kind, m); } return m; }
+  /* Terreno atual (no combate, alçapões viram buracos) */
+  const curTerrain = () => (G.run && G.run.phase === 'COMBAT' && G.combat ? G.combat.terrain : G.run ? G.run.terrain : null);
   let terrainMesh = null, terrainKey = '', discMesh = null;
   function terrain() {
-    const run = G.run, key = run ? `${run.terrain}|${run.act}` : 'none';
+    const run = G.run, tr = curTerrain(), key = run ? `${tr}|${run.act}` : 'none';
     if (terrainMesh && terrainKey === key) return terrainMesh;
-    const at = (c, r) => (c < 0 || r < 0 || c >= N || r >= N) ? '.' : (run ? FE.Engine.terrainAt(run.terrain, c, r) : '.');
+    const at = (c, r) => (c < 0 || r < 0 || c >= N || r >= M) ? '.' : (run ? FE.Engine.terrainAt(tr, c, r) : '.');
     if (terrainMesh) R.gl.deleteBuffer(terrainMesh.b);
-    terrainMesh = mesh(FE.GL3D.buildTerrain(at, N, N, run ? run.act : 1, P0));
+    terrainMesh = mesh(FE.GL3D.buildTerrain(at, N, M, run ? run.act : 1, P0));
     terrainKey = key;
     return terrainMesh;
   }
@@ -130,12 +141,12 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     const k = 1 - Math.pow(0.0015, dt);
     cam.yaw += (cam.tyaw - cam.yaw) * k; cam.pitch += (cam.tpitch - cam.pitch) * k; cam.dist += (cam.tdist - cam.dist) * k;
     const shake = G.combat && G.run && G.run.phase === 'COMBAT' && FE.settings.fx !== false ? G.combat.fx.shake : 0;
-    const tx = 5.9 + (shake ? (Math.random() - 0.5) * shake * 0.012 : 0), tz = 5.9 + (shake ? (Math.random() - 0.5) * shake * 0.012 : 0), ty = -0.1;
+    const tx = N / 2 - 0.1 + (shake ? (Math.random() - 0.5) * shake * 0.012 : 0), tz = M / 2 - 0.1 + (shake ? (Math.random() - 0.5) * shake * 0.012 : 0), ty = -0.1;
     const cp = Math.cos(cam.pitch);
     cam.eye = [tx + Math.sin(cam.yaw) * cam.dist * cp, ty + Math.sin(cam.pitch) * cam.dist, tz + Math.cos(cam.yaw) * cam.dist * cp];
     cam.target = [tx, ty, tz];
     const aspect = R.w / Math.max(1, R.h);
-    const P = M4().perspective(FOV, aspect, 0.5, 80), V = M4().lookAt(cam.eye, cam.target, [0, 1, 0]);
+    const P = M4().perspective(FOV, aspect, 0.5, 140), V = M4().lookAt(cam.eye, cam.target, [0, 1, 0]);
     cam.vp = M4().mul(P, V);
     cam.aspect = aspect;
   }
@@ -150,7 +161,7 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
   const elev = (t) => FE.GL3D.elev(t);
   const groundAt = (x, y) => {
     if (!G.run) return 0;
-    const t = FE.Engine.terrainAt(G.run.terrain, Math.floor(x), Math.floor(y));
+    const t = FE.Engine.terrainAt(curTerrain(), Math.floor(x), Math.floor(y));
     return t === 'B' ? 0.07 : elev(t);
   };
 
@@ -171,13 +182,13 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     const hit = (h) => { const k = (h - e[1]) / dy; return [e[0] + dx * k, e[2] + dz * k]; };
     let [wx, wz] = hit(0);
     for (let i = 0; i < 2; i++) {
-      const tt = G.run ? FE.Engine.terrainAt(G.run.terrain, Math.floor(wx), Math.floor(wz)) : '.';
+      const tt = G.run ? FE.Engine.terrainAt(curTerrain(), Math.floor(wx), Math.floor(wz)) : '.';
       const h = tt === 'B' ? 0.07 : elev(tt);
       if (Math.abs(h) < 1e-3) break;
       [wx, wz] = hit(h);
     }
     out.wx = wx; out.wy = wz; out.col = Math.floor(wx); out.row = Math.floor(wz);
-    out.inside = out.col >= 0 && out.row >= 0 && out.col < N && out.row < N;
+    out.inside = out.col >= 0 && out.row >= 0 && out.col < N && out.row < M;
     return out;
   };
 
@@ -206,8 +217,8 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     else if (a === 'tilt') cam.tpitch = cam.tpitch > 1.15 ? 0.6 : cam.tpitch > 0.8 ? 1.3 : 0.92;
     else if (a === 'up') cam.tpitch = Math.min(1.42, cam.tpitch + 0.12);
     else if (a === 'down') cam.tpitch = Math.max(0.42, cam.tpitch - 0.12);
-    else if (a === 'in') cam.tdist = Math.max(10, cam.tdist - 2.5);
-    else if (a === 'out') cam.tdist = Math.min(32, cam.tdist + 2.5);
+    else if (a === 'in') cam.tdist = Math.max(ZMIN, cam.tdist - 3);
+    else if (a === 'out') cam.tdist = Math.min(ZMAX, cam.tdist + 3);
     else if (a === 'home') { const turns = Math.round((cam.tyaw - CAM0.yaw) / (Math.PI * 2)); cam.tyaw = CAM0.yaw + turns * Math.PI * 2; cam.tpitch = CAM0.pitch; cam.tdist = CAM0.dist; }
   };
   function bindCamInput(el) {
@@ -229,7 +240,7 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     });
     const end = () => { orbit = null; el.classList.remove('orbiting'); };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
-    el.addEventListener('wheel', (e) => { e.preventDefault(); cam.tdist = Math.max(10, Math.min(32, cam.tdist + Math.sign(e.deltaY) * 1.4)); }, { passive: false });
+    el.addEventListener('wheel', (e) => { e.preventDefault(); cam.tdist = Math.max(ZMIN, Math.min(ZMAX, cam.tdist + Math.sign(e.deltaY) * 1.6)); }, { passive: false });
   }
 
   /* ---------------- Desenho ---------------- */
@@ -254,28 +265,38 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     if (!discMesh) discMesh = mesh(FE.GL3D.buildDisc());
     gl.depthMask(false);
     for (const it of items) {
+      if (it.structure) continue;
       const g = groundAt(it.x, it.y) + 0.012, s = (it.isBoss ? 0.62 : it.isSummon ? 0.24 : 0.3) * US;
       drawMesh(discMesh, FE.GL3D.M4.model(it.x, g, it.y, 0, s, 1), { tint: [0.08, 0.1, 0.16, 1], alpha: 0.22 });
     }
     gl.depthMask(true);
     // bonecos
+    const win = run.phase === 'COMBAT' && G.combat && G.combat.over && G.combat.result && G.combat.result.won;
     for (const it of items) {
+      const fl = it.flash > 0 ? Math.min(0.7, it.flash * 6) : 0;
+      if (it.structure) {
+        const g = groundAt(it.x, it.y);
+        drawMesh(structMesh(it.structure), FE.GL3D.M4.model(it.x, g, it.y, 0, 1), { tint: [1, 1, 1, fl * 0.6], alpha: it.preview ? 0.92 : 1 });
+        continue;
+      }
       const key = FE.Art.keyOf(it);
       const acc = it.team === 'p' || it.isSummon ? (it.color || '#94a3b8') : (D.ARCHETYPES[it.archetypeId] ? D.ARCHETYPES[it.archetypeId].color : '#F28C6B');
       const m = unitMesh(key, it.team, acc);
       const yaw = facing(it);
       const scale = (it.isBoss ? 0.95 : it.isElite ? 1.12 : it.isSummon ? 0.85 : 1) * US;
-      const g = groundAt(it.x, it.y) + (it.lifted ? 0.35 : 0) + (it.bob || 0);
-      const fl = it.flash > 0 ? Math.min(0.7, it.flash * 6) : 0;
-      drawMesh(m, FE.GL3D.M4.model(it.x, g, it.y, yaw, scale), { tint: [1, 1, 1, fl], alpha: it.faded ? 0.55 : 1 });
+      const g = groundAt(it.x, it.y) + (it.lifted ? 0.35 : 0);
+      drawRigged(m, it, FE.GL3D.M4.model(it.x, g, it.y, yaw, scale), pose(it, now, dt, win), { tint: [1, 1, 1, fl], alpha: it.faded ? 0.55 : 1 });
     }
-    // fantasmas
+    // fantasmas: caem para trás e somem
     if (run.phase === 'COMBAT' && G.combat) {
       gl.depthMask(false);
       for (const gh of G.combat.fx.ghosts) {
-        const k = Math.max(0, gh.life / gh.maxLife);
+        const k = Math.max(0, gh.life / gh.maxLife), e = 1 - k;
+        const base = FE.GL3D.M4.model(gh.x, groundAt(gh.x, gh.y) - e * 0.25, gh.y, gh.team === 'player' ? Math.PI : 0, gh.structure ? 1 : (gh.isBoss ? 0.95 : 1) * US);
+        if (gh.structure) { drawMesh(structMesh(gh.structure), FE.GL3D.M4.mul(base, FE.GL3D.M4.model(0, 0, 0, 0, 1, Math.max(0.05, k))), { gray: 1, alpha: k * 0.8 }); continue; }
         const m = unitMesh(FE.Art.keyOf(gh), gh.team === 'player' ? 'p' : 'e', '#cbd5e1');
-        drawMesh(m, FE.GL3D.M4.model(gh.x, groundAt(gh.x, gh.y) + (1 - k) * 0.6, gh.y, gh.team === 'player' ? Math.PI : 0, (gh.isBoss ? 0.95 : 1) * US), { gray: 1, alpha: k * 0.45 });
+        const fall = FE.GL3D.M4.mul(base, FE.GL3D.M4.joint(0, 0, 0, -Math.min(1, e * 2.2) * 1.45, 0));
+        drawRigged(m, gh, fall, null, { gray: 1, alpha: Math.min(1, k * 1.6) * 0.6 });
       }
       gl.depthMask(true);
     }
@@ -284,10 +305,78 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     if (run.phase === 'COMBAT' && G.combat) fx(G.combat.fx);
   };
 
+  /* ---------------- v5.0: animação dos bonecos articulados ----------------
+     Ângulos em radianos. rx < 0 leva braço/perna para a frente (+Z). */
+  const animState = new WeakMap();
+  const RANGED_BOW = new Set(['cacador']);
+  function pose(it, now, dt, win) {
+    let a = animState.get(it.ref);
+    if (!a) { a = { ph: Math.random() * 6, v: 0, seed: Math.random() * 6 }; if (it.ref) animState.set(it.ref, a); }
+    const sp = Math.hypot(it.dx || 0, it.dy || 0) / Math.max(dt, 1e-3);
+    a.v += (Math.min(1, sp / 1.4) - a.v) * Math.min(1, dt * 9);
+    a.ph += dt * (5 + 7 * a.v);
+    const P = { legL: [0, 0], legR: [0, 0], armL: [0, -0.07], armR: [0, 0.07], head: [0, 0], torso: [0, 0], ty: 0, dy: 0, sq: 1 };
+    const w = a.v, s = Math.sin(a.ph), br = Math.sin(now * 2.1 + a.seed);
+    // andar
+    P.legL[0] = -s * 0.8 * w; P.legR[0] = s * 0.8 * w;
+    P.armL[0] = s * 0.6 * w; P.armR[0] = -s * 0.6 * w;
+    P.dy = Math.abs(Math.cos(a.ph)) * 0.04 * w; P.torso[0] = 0.12 * w;
+    // respirar parado
+    P.armL[1] += -br * 0.03; P.armR[1] += br * 0.03; P.head[0] += br * 0.03;
+    if (it.lifted) { P.legL[0] = -0.4; P.legR[0] = 0.3; P.armL[1] = -0.6; P.armR[1] = 0.6; }
+    // ataque
+    if (it.animAtk > 0) {
+      const t = 1 - it.animAtk;
+      if ((it.range || 0) > 2.3) {
+        const env = Math.sin(Math.PI * Math.min(1, t * 1.15));
+        P.armR[0] = -1.5 * env; if (RANGED_BOW.has(it.archetypeId)) P.armL[0] = -1.45 * env; P.torso[0] -= 0.08 * env; P.torso[2] = 0.2 * env;
+      } else {
+        const ang = t < 0.3 ? -2.7 * (t / 0.3) : t < 0.55 ? -2.7 + 2.3 * ((t - 0.3) / 0.25) : -0.4 * (1 - (t - 0.55) / 0.45);
+        P.armR[0] = ang; P.armL[0] = it.isBoss ? ang : -0.5 * Math.sin(Math.PI * t);
+        P.torso[2] = t < 0.3 ? -0.3 * (t / 0.3) : 0.25 * (1 - t); P.torso[0] += t > 0.3 && t < 0.7 ? 0.2 : 0;
+        P.sq = 1 - 0.12 * Math.sin(Math.PI * t);
+      }
+    }
+    // conjurar: braços para o alto
+    if (it.animCast > 0) {
+      const env = Math.sin(Math.PI * (1 - it.animCast));
+      P.armL[0] = -2.9 * env; P.armR[0] = -2.9 * env; P.armL[1] = -0.35 * env; P.armR[1] = 0.35 * env;
+      P.head[0] -= 0.25 * env; P.dy += 0.07 * env; P.torso[0] -= 0.1 * env;
+    }
+    // levar dano
+    if (it.flash > 0) { const f = Math.min(1, it.flash * 6); P.torso[0] -= 0.28 * f; P.head[0] -= 0.2 * f; }
+    if (it.stunned) { P.head[1] = Math.sin(now * 9) * 0.28; P.torso[1] = Math.sin(now * 4.5) * 0.07; }
+    // comemorar a vitória
+    if (win && it.team === 'p') { const j = Math.abs(Math.sin(now * 6 + a.seed)); P.armL[0] = -2.9; P.armR[0] = -2.9; P.armL[1] = -0.3; P.armR[1] = 0.3; P.dy += j * 0.12; }
+    return P;
+  }
+  function drawRigged(m, it, base, P, o) {
+    const M4x = FE.GL3D.M4;
+    if (m.single) {
+      if (!P) { drawMesh(m.single, base, o); return; }
+      const hop = P.dy + Math.abs(Math.sin(animState.get(it.ref) ? animState.get(it.ref).ph : 0)) * 0.05 * (P.legL[0] ? 1 : 0);
+      drawMesh(m.single, M4x.mul(base, M4x.model(0, hop, 0, 0, 1, P.sq)), o);
+      return;
+    }
+    const pv = m.pivots;
+    const T = P ? M4x.mul(base, M4x.joint(pv.torso[0], pv.torso[1], pv.torso[2], P.torso[0], P.torso[1], P.torso[2] || 0, P.dy)) : base;
+    for (const name in m.parts) {
+      let Mx;
+      if (name === 'base') Mx = base;
+      else if (!P) Mx = base;
+      else if (name === 'torso') Mx = T;
+      else if (name === 'legL' || name === 'legR') { const q = pv[name], r = P[name]; Mx = M4x.mul(base, M4x.joint(q[0], q[1], q[2], r[0], r[1])); }
+      else { const q = pv[name], r = P[name] || [0, 0]; Mx = M4x.mul(T, M4x.joint(q[0], q[1], q[2], r[0], r[1])); }
+      drawMesh(m.parts[name], Mx, o);
+    }
+  }
+
   function collect(run, editing, drag) {
     const items = [];
     if (run.phase !== 'COMBAT' || !G.combat) {
+      for (const s of run.structures || []) items.push({ ref: s, x: s.x, y: s.y, team: s.team === 'player' ? 'p' : 'e', structure: s.structure, preview: true, hp: 1, displayHp: 1, maxHp: 1, shield: 0, mana: 0, maxMana: 1 });
       for (const e of run.enemies) {
+        if (e.wave > 1 || e.fortSpawn) continue;
         items.push({ ref: e, x: e.col + 0.5, y: e.row + 0.5, team: 'e', archetypeId: e.archetypeId, color: e.color, symbol: e.symbol, level: e.level, isBoss: e.isBoss, isElite: e.isElite, affixes: e.affixes, elements: e.elements,
           hp: 1, displayHp: 1, maxHp: 1, shield: 0, mana: 0, maxMana: 1, preview: true, selected: FE.UI && FE.UI.inspectEnemyId === e.id });
       }
@@ -313,8 +402,8 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
         items.push({ ref: u, x, y, team: u.team === 'player' ? 'p' : 'e', color: u.color, symbol: u.symbol, archetypeId: u.archetypeId, level: u.level, isBoss: u.isBoss, isElite: u.isElite, affixes: u.affixes,
           elements: u.elements, items: ru ? ru.items.length : 0, hp: u.hp, displayHp: u.displayHp, maxHp: u.stats.maxHp, shield: u.shield, mana: u.mana, maxMana: u.stats.maxMana,
           isSummon: u.isSummon, quality: ru ? ru.quality || 0 : 0, selected: u.rosterId && G.selectedId === u.rosterId, stunned: u.stun > 0, chilled: u.chill > 0, burning: u.burn > 0, flash: u.flash || 0,
-          ownerColor: G.isCoop() && u.team === 'player' && ru ? G.ownerOf(ru).color : null, bob: moving ? Math.abs(Math.sin(t * 13 + (u.x + u.y) * 3)) * 0.06 : 0,
-          dx: pp ? u.x - pp[0] : 0, dy: pp ? u.y - pp[1] : 0, target: u.target });
+          ownerColor: G.isCoop() && u.team === 'player' && ru ? G.ownerOf(ru).color : null,
+          dx: pp ? u.x - pp[0] : 0, dy: pp ? u.y - pp[1] : 0, target: u.target, structure: u.structure, animAtk: u.animAtk, animCast: u.animCast, range: u.stats.range });
         prevPos.set(u, [u.x, u.y]);
       }
     }
@@ -336,7 +425,7 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
   /* ---------------- Camada 2D: destaques, barras, efeitos ---------------- */
   function poly(ctx, pts) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); }
   function tileQuad(c, r) {
-    const t = G.run ? FE.Engine.terrainAt(G.run.terrain, c, r) : '.', h = (t === 'B' ? 0.07 : elev(t)) + 0.01;
+    const t = G.run ? FE.Engine.terrainAt(curTerrain(), c, r) : '.', h = (t === 'B' ? 0.07 : elev(t)) + 0.01;
     const pts = [project(c, h, r), project(c + 1, h, r), project(c + 1, h, r + 1), project(c, h, r + 1)];
     return pts.every(Boolean) ? pts : null;
   }
@@ -348,7 +437,7 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
   function overlay(ctx, run, editing, drag, items) {
     if (editing && R.hover && R.hover.inside) {
       const { col, row } = R.hover, mine = row >= P0;
-      const bad = !mine || FE.Engine.tileBlocked(run.terrain, col, row);
+      const bad = !mine || G.noPlace(col, row);
       const q = tileQuad(col, row);
       if (q && (mine || drag)) {
         poly(ctx, q); ctx.fillStyle = bad ? 'rgba(217,72,59,.28)' : drag ? 'rgba(19,137,124,.32)' : 'rgba(242,179,61,.30)'; ctx.fill();
@@ -365,8 +454,8 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     const proj = items.map(it => {
       const g = groundAt(it.x, it.y);
       const sc = (it.isBoss ? 0.95 : it.isElite ? 1.12 : it.isSummon ? 0.85 : 1) * US;
-      const H = (it.isBoss ? 1.7 : it.isSummon ? 0.62 : 1.0) * sc;
-      return { it, foot: project(it.x, g + (it.lifted ? 0.35 : 0), it.y), head: project(it.x, g + H + (it.bob || 0), it.y), g };
+      const H = it.structure ? ({ cidade: 1.5, forte: 2.3, torre: 2.0 }[it.structure] || 1.5) : (it.isBoss ? 1.7 : it.isSummon ? 0.62 : 1.0) * sc;
+      return { it, foot: project(it.x, g + (it.lifted ? 0.35 : 0), it.y), head: project(it.x, g + H, it.y), g };
     }).filter(p => p.foot && p.head).sort((a, b) => a.foot.ppu - b.foot.ppu);
     const t = performance.now() / 1000;
     for (const { it, foot, head, g } of proj) {
@@ -389,8 +478,9 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
   function bars(ctx, u, x, y, k) {
     k = Math.max(0.55, Math.min(1.6, k));
     const boss = u.isBoss, summon = u.isSummon;
+    if (u.structure && u.preview) { label(ctx, u, x, y, k); return; }
     if (u.preview && !u.selected && u.team === 'e' && !boss && !u.isElite) { badge(ctx, u, x, y, k); return; }
-    const bw = (boss ? 64 : summon ? 22 : 34) * k, bh = (summon ? 3 : 4.6) * k, bx = x - bw / 2, by = y - 8 * k;
+    const bw = (u.structure === 'torre' ? 40 : u.structure ? 80 : boss ? 64 : summon ? 22 : 34) * k, bh = (summon ? 3 : 4.6) * k, bx = x - bw / 2, by = y - 8 * k;
     ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = 'rgba(30,36,51,.18)'; ctx.lineWidth = 1;
     rrect(ctx, bx - 2, by - 2, bw + 4, bh + 4 + (summon ? 0 : 2.6 * k), 4); ctx.fill(); ctx.stroke();
     const ratio = Math.max(0, Math.min(1, u.hp / u.maxHp)), disp = Math.max(0, Math.min(1, u.displayHp / u.maxHp));
@@ -398,12 +488,20 @@ void main(){ vec3 n = normalize(vN); float d = max(dot(n,uL),0.0);
     ctx.fillStyle = 'rgba(242,179,61,.75)'; rrect(ctx, bx, by, bw * disp, bh, 2); ctx.fill();
     ctx.fillStyle = u.team === 'p' ? '#13897C' : '#D9483B'; rrect(ctx, bx, by, bw * ratio, bh, 2); ctx.fill();
     if (u.shield > 0) { ctx.fillStyle = '#7DC4F5'; rrect(ctx, bx, by, bw * Math.min(1, u.shield / u.maxHp), 2, 1); ctx.fill(); }
+    if (u.structure) return;
     if (!summon) {
       ctx.fillStyle = '#E8EEF5'; ctx.fillRect(bx, by + bh + 1, bw, 1.6 * k);
       ctx.fillStyle = '#5B8DEF'; ctx.fillRect(bx, by + bh + 1, bw * Math.max(0, Math.min(1, u.mana / u.maxMana)), 1.6 * k);
       badge(ctx, u, bx + bw + 7 * k, by + bh / 2, k);
     }
     if (u.evo) { ctx.fillStyle = '#6B4FA0'; ctx.beginPath(); ctx.arc(bx - 6 * k, by + bh / 2, 3.2 * k, 0, Math.PI * 2); ctx.fill(); }
+  }
+  function label(ctx, u, x, y, k) {
+    const txt = { cidade: '🏘️ Cidade (proteja!)', forte: '🏰 Fortaleza (derrube!)', torre: '🗼 Torre' }[u.structure] || '';
+    ctx.font = `800 ${Math.round(11 * k)}px Nunito, Inter, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(txt).width + 14;
+    ctx.fillStyle = u.team === 'p' ? 'rgba(19,137,124,.92)' : 'rgba(217,72,59,.92)'; rrect(ctx, x - w / 2, y - 10 * k, w, 18 * k, 9 * k); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(txt, x, y - 1 * k);
   }
   function badge(ctx, u, x, y, k) {
     const r = 6.6 * k;

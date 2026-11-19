@@ -9,7 +9,7 @@
   'use strict';
   const FE = root.FE, D = FE.Data, C = D.CONFIG, G = FE.Game;
   const R = FE.RenderIso = { tile: 52, tw: 52, th: 26, ox: 0, oy: 0, w: 0, h: 0, canvas: null, ctx: null, hover: null, statsCache: new Map() };
-  const N = C.COLS, P0 = C.PLAYER_ROW;
+  const N = C.COLS, NR = C.ROWS, P0 = C.PLAYER_ROW;
 
   R.init = function (canvas) {
     R.canvas = canvas; R.ctx = canvas.getContext('2d');
@@ -22,11 +22,11 @@
     R.canvas.width = Math.round(rect.width * dpr); R.canvas.height = Math.round(rect.height * dpr);
     R.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     R.w = rect.width; R.h = rect.height;
-    const tw = Math.min(rect.width / (N + 0.9), rect.height / (N * 0.5 + 2.6));
+    const tw = Math.min(rect.width / ((N + NR) / 2 + 0.9), rect.height / ((N + NR) * 0.25 + 2.6));
     R.tw = tw; R.th = tw / 2; R.tile = tw;
     R.k = tw / 52;
     R.ox = rect.width / 2;
-    R.oy = (rect.height - N * R.th) / 2 + tw * 0.62;
+    R.oy = (rect.height - (N + NR) / 2 * R.th) / 2 + tw * 0.62;
     R.tcache = null;
   };
   R.invalidate = function () {
@@ -49,7 +49,7 @@
     const t = G.run ? FE.Engine.terrainAt(G.run.terrain, col, row) : '.';
     const e = elev(t) * R.k;
     if (e > 0) { const v2 = (py + e - R.oy) / (R.th / 2); wx = (u + v2) / 2; wy = (v2 - u) / 2; col = Math.floor(wx); row = Math.floor(wy); }
-    const inside = col >= 0 && row >= 0 && col < N && row < N && px >= 0 && py >= 0 && px < rect.width && py < rect.height;
+    const inside = col >= 0 && row >= 0 && col < N && row < NR && px >= 0 && py >= 0 && px < rect.width && py < rect.height;
     return { col, row, px, py, wx, wy, inside };
   };
 
@@ -163,12 +163,12 @@
     cv.width = Math.round(R.w * dpr); cv.height = Math.round(R.h * dpr);
     const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
     // sombra da ilha
-    const [cx, cy] = P(N / 2, N / 2);
+    const [cx, cy] = P(N / 2, NR / 2);
     const sg = x.createRadialGradient(cx, cy + R.th * 1.2, 0, cx, cy + R.th * 1.2, R.tw * N * 0.56);
     sg.addColorStop(0, 'rgba(30,36,51,.16)'); sg.addColorStop(0.75, 'rgba(30,36,51,.07)'); sg.addColorStop(1, 'rgba(30,36,51,0)');
     x.fillStyle = sg; x.beginPath(); x.ellipse(cx, cy + R.th * 1.2, R.tw * N * 0.56, R.th * N * 0.6, 0, 0, Math.PI * 2); x.fill();
     const cells = [];
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) cells.push([c, r]);
+    for (let r = 0; r < NR; r++) for (let c = 0; c < N; c++) cells.push([c, r]);
     cells.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]) || a[1] - b[1]);
     for (const [c, r] of cells) block(x, terrain ? FE.Engine.terrainAt(terrain, c, r) : '.', c, r);
     // tinta suave por lado + fronteira

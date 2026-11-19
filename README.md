@@ -19,6 +19,15 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
 
+## Novidades da 5.0 — Campo de Batalha Vivo
+- **Bonecos articulados** (pernas, braços, cabeça): andam, golpeiam, atiram, conjuram, recuam ao levar dano, cambaleiam atordoados, caem ao morrer e comemoram a vitória. Ver `pose()` e `drawRigged()` em `render.js` e `Builder.rig()` em `gl3d.js`.
+- **Tabuleiro 16×14** e hordas maiores (`CONFIG.COLS/ROWS`, `generateHorde`). O gerador de terreno agora é paramétrico.
+- **Missões** (`D.MISSIONS`): Batalha Campal, Reforços Inimigos (ondas), Defender a Cidade, Invadir a Base. Estruturas são unidades com `structure` e `radius` (`createCombat`, `updateWaves`).
+- **Condições de campo** (`D.CONDITIONS`): Dois Andares (`U`), Alçapões (`T` → `O`), Chão Desabado, Desfiladeiro Estreito. `cap` reduz o limite em campo (`G.fieldLimit`).
+- **Cenário**: entorno temático por Ato, moldura de diorama, cidade/fortaleza/torres em 3D (`buildSurround`, `buildStructure`).
+- **Interface compacta**: cartões com −, colunas com ‹ › (tecla H), dock recolhível, Tela ampla no combate (`UI.applyLayout`).
+- Saves da 4.x não carregam (o tabuleiro mudou de tamanho).
+
 ## Novidades da 4.1 — Tabuleiro 3D
 - **`js/gl3d.js`**: mini-motor WebGL próprio (sem dependências) — matrizes, construtor de malhas low-poly (caixa, cilindro, cone, esfera, toro, cápsula) com cor e brilho por vértice, terreno 3D por tipo de casa e bonecos 3D por classe/invocação/chefe.
 - **`js/render.js`**: renderizador 3D com câmera orbital (yaw/pitch/zoom suavizados), seleção de casa por raio, sombras, bonecos virando para o alvo e camada 2D (`#battle-canvas`) para barras, números e efeitos.

@@ -9,7 +9,7 @@
   const FE = root.FE;
 
   const CONFIG = {
-    COLS: 12, ROWS: 12, PLAYER_ROW: 6, BENCH: 8, MAX_TEAM: 16,
+    COLS: 16, ROWS: 14, PLAYER_ROW: 7, BENCH: 8, MAX_TEAM: 16,
     ROOMS_PER_ACT: 6, ACTS: 4, TOTAL_ROOMS: 24, COOP_TOTAL_UNITS: 12, COOP_XP_DIV: 12,
     START_GOLD: 150, START_CITADEL: 100, START_TEAM_LIMIT: 4,
     SELL_RATIO: 0.75, INTEREST_RATE: 0.10, INTEREST_CAP: 25,
@@ -389,7 +389,29 @@
     F: { name: 'Floresta', icon: '🌲', blocked: false, desc: '+15% de Esquiva contra ataques físicos para quem está nela.' },
     H: { name: 'Colina', icon: '⛰', blocked: false, desc: 'Unidades à distância ganham +1 de Alcance e +10% de dano.' },
     S: { name: 'Pântano', icon: '🪷', blocked: false, desc: '-45% de Velocidade de Movimento.' },
-    L: { name: 'Lava', icon: '🔥', blocked: false, desc: 'Causa 3% da Vida Máxima por segundo a quem estiver sobre ela.' }
+    L: { name: 'Lava', icon: '🔥', blocked: false, desc: 'Causa 3% da Vida Máxima por segundo a quem estiver sobre ela.' },
+    U: { name: 'Andar Superior', icon: '🧱', blocked: false, desc: 'Plataforma elevada: atiradores ganham +1,5 de Alcance e +15% de dano; todos recebem +10% de Esquiva.' },
+    T: { name: 'Alçapão', icon: '🚪', blocked: false, noPlace: true, desc: 'Armadilha escondida: o primeiro que pisar cai, perde 22% da Vida e fica atordoado. Depois vira um buraco.' },
+    O: { name: 'Buraco', icon: '⚫', blocked: true, desc: 'Fosso aberto no chão: intransponível e sem espaço para posicionar.' },
+    Z: { name: 'Fortificação', icon: '🏰', blocked: false, noPlace: true, desc: 'Área de uma estrutura (cidade ou fortaleza). Não dá para posicionar aqui.' }
+  };
+
+  /* ---------------- v5.0 — MISSÕES E CONDIÇÕES DE CAMPO --------------------
+     Missão = o que você precisa fazer para vencer. Condição = como o campo
+     está montado (andares, alçapões, buracos, passagens estreitas...).
+     tune ajusta a força da horda para manter a dificuldade calibrada. */
+  const MISSIONS = {
+    batalha: { name: 'Batalha Campal', icon: '⚔️', short: 'Derrote todos os inimigos.', desc: 'A horda inteira já está em campo. Vença derrotando todos.', tune: 1, weight: 40 },
+    ondas: { name: 'Reforços Inimigos', icon: '🌊', short: 'A horda chega em ondas.', desc: 'Só parte da horda começa em campo. Novas ondas entram pelo norte com o tempo ou quando a onda atual cai.', tune: 1.15, weight: 24, waves: [2, 3] },
+    defesa: { name: 'Defender a Cidade', icon: '🏘️', short: 'Proteja a cidade até a última onda.', desc: 'Uma cidade fica atrás das suas linhas. Saqueadores vão direto nela. Se ela cair, você perde. Vença 3 ondas.', tune: 1.1, weight: 14, waves: [3, 3], acts: [1, 2, 3, 4], reward: 'gold' },
+    invasao: { name: 'Invadir a Base', icon: '🏰', short: 'Destrua a fortaleza inimiga.', desc: 'Os inimigos defendem uma fortaleza com torres de arqueiros. Ela envia reforços enquanto estiver de pé. Derrube a fortaleza e a horda foge.', tune: 0.95, weight: 14, acts: [1, 2, 3, 4], reward: 'item' }
+  };
+  const CONDITIONS = {
+    nenhuma: { name: 'Campo Normal', icon: '·', desc: '', weight: 34 },
+    andares: { name: 'Dois Andares', icon: '🧱', desc: 'Plataformas elevadas dão vantagem a atiradores. Disputar o andar de cima decide a luta.', weight: 18 },
+    alcapoes: { name: 'Alçapões', icon: '🚪', desc: 'Há armadilhas escondidas na terra de ninguém. O primeiro que pisar cai.', weight: 16 },
+    buracos: { name: 'Chão Desabado', icon: '⚫', desc: 'Buracos tomam parte do seu lado do campo. Cabe 1 unidade a menos.', weight: 14, cap: 1, tune: 0.92 },
+    estreito: { name: 'Desfiladeiro Estreito', icon: '🏔️', desc: 'Paredões fecham as laterais. Cabem 2 unidades a menos em campo.', weight: 12, cap: 2, tune: 0.85, acts: [2, 3, 4] }
   };
 
   const LAYOUTS = {
@@ -421,7 +443,7 @@
       elite: [0.65, 2.0, 3.2, 5.2],
       chefe: [1.2, 2.6, 2.4, 6.0]
     },
-    diff: 0.72, kMin: 0.4, kMax: 7, ascPer: 0.08, coopMult: [1.5, 2.2, 2.6, 2.8],
+    diff: 0.68, kMin: 0.4, kMax: 7, ascPer: 0.08, coopMult: [1.15, 1.7, 2.0, 2.2],
     threatMin: -3, threatMax: 10, threatPer: 0.07, rewardPer: 0.06
   };
 
@@ -547,5 +569,5 @@
     hp: [0.20, 0.40, 0.60, 0.85], armor: [0.15, 0.30, 0.45, 0.60], armorFlat: [4, 10, 18, 28],
     magic: [0.06, 0.12, 0.18, 0.24], elem: [0.10, 0.18, 0.26, 0.34], eliteMult: 1.2, bossMult: 1.35, fixedK: 0.4
   };
-  FE.Data = { ENEMY_DEFENSE, DOCTRINES, COUNTERS, OBJECTIVES, TACTICS, TRAITS, QUARTEL, SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
+  FE.Data = { MISSIONS, CONDITIONS, ENEMY_DEFENSE, DOCTRINES, COUNTERS, OBJECTIVES, TACTICS, TRAITS, QUARTEL, SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);

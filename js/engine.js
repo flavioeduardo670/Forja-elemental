@@ -244,6 +244,22 @@
     return rng.chance(0.25) ? 'padrao' : rng.pick(keys.slice(1));
   }
 
+  /* v5.0: cada sala de combate sorteia uma missão e uma condição de campo */
+  function rollScenario(rng, type, room, act) {
+    if (room === 1) return { mission: 'batalha', cond: 'nenhuma' };
+    const ok = (o) => !o.acts || o.acts.includes(act);
+    let missions = Object.entries(D.MISSIONS).filter(([, m]) => ok(m));
+    if (type === 'chefe') missions = missions.filter(([k]) => k === 'batalha' || k === 'ondas');
+    if (type === 'elite') missions = missions.filter(([k]) => k !== 'defesa');
+    if (room <= 2) missions = missions.filter(([k]) => k === 'batalha' || k === 'ondas');
+    const mission = rng.weighted(missions.map(([k, m]) => [k, type === 'chefe' && k === 'ondas' ? 20 : m.weight]));
+    let conds = Object.entries(D.CONDITIONS).filter(([, o]) => ok(o));
+    if (room <= 2) conds = conds.filter(([k]) => k === 'nenhuma' || k === 'andares');
+    if (type === 'chefe') conds = conds.filter(([k]) => k === 'nenhuma' || k === 'andares');
+    const cond = rng.weighted(conds.map(([k, o]) => [k, o.weight]));
+    return { mission, cond };
+  }
+
   function generateActMap(rng, act, asc) {
     const floors = [];
     for (let f = 1; f <= C.ROOMS_PER_ACT; f++) {
@@ -260,9 +276,11 @@
         const room = (act - 1) * C.ROOMS_PER_ACT + f;
         const fights = type === 'combate' || type === 'elite' || type === 'chefe';
         const layouts = Object.keys(D.LAYOUTS).filter(k => D.LAYOUTS[k].acts.includes(act));
-        nodes.push({ id: `a${act}f${f}n${i}`, act, floor: f, index: i, type, room,
+        const nd = { id: `a${act}f${f}n${i}`, act, floor: f, index: i, type, room,
           affix: (type === 'combate' || type === 'elite') ? rollAffix(rng, room) : 'padrao',
-          layout: fights ? (room === 1 ? 'planicie' : rng.pick(layouts)) : null, next: [] });
+          layout: fights ? (room === 1 ? 'planicie' : rng.pick(layouts)) : null, next: [] };
+        if (fights) Object.assign(nd, rollScenario(rng, type, room, act));
+        nodes.push(nd);
       }
       floors.push(nodes);
     }
@@ -272,6 +290,7 @@
       if (floors[fi].some(n => n.type === 'combate' || n.type === 'elite')) continue;
       const n0 = floors[fi][0]; n0.type = 'combate'; n0.affix = rollAffix(rng, n0.room);
       n0.layout = n0.layout || rng.pick(Object.keys(D.LAYOUTS).filter(k => D.LAYOUTS[k].acts.includes(act)));
+      if (!n0.mission) Object.assign(n0, rollScenario(rng, 'combate', n0.room, act));
     }
     const link = (a, id) => { if (!a.next.includes(id)) a.next.push(id); };
     for (let f = 0; f < floors.length - 1; f++) {
@@ -291,7 +310,7 @@
     return { act, floors };
   }
 
-  /* ---------------- Terreno procedural (12x12, espelhado entre os lados) --- */
+  /* ---------------- Terreno procedural (16x14, espelhado entre os lados) --- */
   const isBlocked = (t) => !!(D.TERRAIN[t] && D.TERRAIN[t].blocked);
   function terrainAt(terrain, col, row) {
     if (!terrain || col < 0 || row < 0 || col >= C.COLS || row >= C.ROWS) return '.';
@@ -302,79 +321,101 @@
     return isBlocked(terrainAt(terrain, col, row));
   }
 
-  function generateTerrain(rng, layout, act) {
-    const N = C.COLS, H = C.ROWS, half = H / 2;
+  function generateTerrain(rng, layout, act, cond = 'nenhuma', mission = 'batalha') {
+    const N = C.COLS, H = C.ROWS, half = Math.floor(H / 2), mid = half - 1, cx = N / 2;
     const g = Array(N * H).fill('.');
     const set = (c, r, t) => { if (c >= 0 && c < N && r >= 0 && r < half) g[r * N + c] = t; };
+    const get = (c, r) => g[r * N + c];
     const rnd = (a, b) => rng.int(a, b);
+    // grupos de colunas para pontes/passagens espalhadas pela largura
+    const groups = (n) => { const out = [], w = N / n; for (let i = 0; i < n; i++) { const a = Math.round(i * w) + 1, b = Math.round((i + 1) * w) - 2; out.push([...Array(Math.max(1, b - a + 1)).keys()].map(k => a + k)); } return out; };
     switch (layout) {
       case 'planicie':
-        for (let k = rnd(3, 5); k > 0; k--) set(rnd(0, N - 1), rnd(1, 4), rng.pick(['F', 'F', 'H']));
+        for (let k = rnd(5, 8); k > 0; k--) set(rnd(0, N - 1), rnd(1, half - 2), rng.pick(['F', 'F', 'H']));
         break;
       case 'floresta':
-        for (let k = rnd(11, 15); k > 0; k--) set(rnd(0, N - 1), rnd(1, 5), 'F');
-        for (let k = 2; k > 0; k--) set(rnd(1, N - 2), rnd(2, 4), 'M');
+        for (let k = rnd(16, 22); k > 0; k--) set(rnd(0, N - 1), rnd(1, mid), 'F');
+        for (let k = 3; k > 0; k--) set(rnd(1, N - 2), rnd(2, half - 2), 'M');
         break;
       case 'rio': {
-        for (let c = 0; c < N; c++) set(c, 5, 'W');
-        const groups = [[1, 2, 3], [5, 6], [8, 9, 10]];
-        for (const gr of rng.shuffle(groups).slice(0, rnd(2, 3))) set(rng.pick(gr), 5, 'B');
-        for (let k = rnd(2, 4); k > 0; k--) set(rnd(0, N - 1), rnd(1, 3), rng.pick(['F', 'H']));
+        for (let c = 0; c < N; c++) set(c, mid, 'W');
+        for (const gr of rng.shuffle(groups(4)).slice(0, rnd(2, 3))) { const c0 = rng.pick(gr); set(c0, mid, 'B'); if (rng.chance(0.4)) set(c0 + 1, mid, 'B'); }
+        for (let k = rnd(3, 5); k > 0; k--) set(rnd(0, N - 1), rnd(1, mid - 2), rng.pick(['F', 'H']));
         break;
       }
       case 'lago':
         for (let r = 0; r < half; r++) for (let c = 0; c < N; c++) {
-          const dx = (c + 0.5 - N / 2) / 2.7, dy = (r + 0.5 - H / 2) / 1.9;
+          const dx = (c + 0.5 - cx) / 3.5, dy = (r + 0.5 - H / 2) / 2.3;
           if (dx * dx + dy * dy <= 1) set(c, r, 'W');
         }
-        for (let k = rnd(3, 5); k > 0; k--) set(rnd(0, N - 1), rnd(2, 4), 'F');
+        for (let k = rnd(4, 6); k > 0; k--) set(rnd(0, N - 1), rnd(2, half - 2), 'F');
         break;
       case 'montanha': {
         const gaps = new Set();
-        for (const gr of [[1, 2], [5, 6], [9, 10]]) { const c0 = rng.pick(gr); gaps.add(c0); if (rng.chance(0.4)) gaps.add(c0 + 1); }
-        for (let c = 0; c < N; c++) if (!gaps.has(c)) { set(c, 5, 'M'); if (rng.chance(0.3) && !gaps.has(c - 1) && !gaps.has(c + 1)) set(c, 4, 'M'); }
-        for (let k = 3; k > 0; k--) set(rnd(0, N - 1), rnd(1, 3), 'H');
+        for (const gr of groups(4)) { const c0 = rng.pick(gr); gaps.add(c0); if (rng.chance(0.4)) gaps.add(c0 + 1); }
+        for (let c = 0; c < N; c++) if (!gaps.has(c)) { set(c, mid, 'M'); if (rng.chance(0.3) && !gaps.has(c - 1) && !gaps.has(c + 1)) set(c, mid - 1, 'M'); }
+        for (let k = 4; k > 0; k--) set(rnd(0, N - 1), rnd(1, mid - 2), 'H');
         break;
       }
       case 'pantano':
-        for (let k = 4; k > 0; k--) {
-          const cx = rnd(1, N - 2), cy = rnd(2, 5);
-          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (rng.chance(0.7)) set(cx + dx, cy + dy, 'S');
+        for (let k = 5; k > 0; k--) {
+          const px = rnd(1, N - 2), py = rnd(2, mid);
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (rng.chance(0.7)) set(px + dx, py + dy, 'S');
         }
-        for (let k = 2; k > 0; k--) set(rnd(1, N - 2), rnd(3, 5), 'W');
+        for (let k = 3; k > 0; k--) set(rnd(1, N - 2), rnd(3, mid), 'W');
         break;
-      case 'ravina':
-        for (let r = 1; r < half; r++) { set(5, r, 'R'); set(6, r, 'R'); }
-        set(5, 3, 'B'); set(6, 3, 'B');
-        for (let k = 2; k > 0; k--) { const c = rnd(1, 3), r = rnd(2, 4); set(c, r, 'M'); set(N - 1 - c, r, 'M'); }
+      case 'ravina': {
+        const a = Math.floor(cx) - 1, b = Math.floor(cx);
+        for (let r = 1; r < half; r++) { set(a, r, 'R'); set(b, r, 'R'); }
+        const br = rnd(2, mid - 1); set(a, br, 'B'); set(b, br, 'B');
+        for (let k = 3; k > 0; k--) { const c = rnd(1, a - 2), r = rnd(2, mid - 1); set(c, r, 'M'); set(N - 1 - c, r, 'M'); }
         break;
+      }
       case 'ruinas':
-        for (let k = rnd(4, 6); k > 0; k--) { const c = rnd(0, 5), r = rnd(2, 5); set(c, r, 'P'); set(N - 1 - c, r, 'P'); }
-        for (let k = 2; k > 0; k--) set(rnd(0, N - 1), rnd(1, 3), 'H');
+        for (let k = rnd(5, 8); k > 0; k--) { const c = rnd(0, Math.floor(cx) - 1), r = rnd(2, mid); set(c, r, 'P'); set(N - 1 - c, r, 'P'); }
+        for (let k = 3; k > 0; k--) set(rnd(0, N - 1), rnd(1, mid - 2), 'H');
         break;
       case 'ilhas': {
         for (let r = 2; r < half; r++) for (let c = 0; c < N; c++) set(c, r, 'R');
-        for (let r = 2; r <= 4; r++) for (let c = 1; c <= 4; c++) set(c, r, '.');
-        for (let r = 2; r <= 4; r++) for (let c = 7; c <= 10; c++) set(c, r, '.');
-        set(5, 3, 'B'); set(6, 3, 'B');
-        for (const c of rng.shuffle([2, 3, 8, 9]).slice(0, 2)) set(c, 5, 'B');
-        for (let k = 2; k > 0; k--) set(rnd(1, 10), rnd(2, 4), 'H');
+        const w = Math.floor(N * 0.32);
+        for (let r = 2; r <= mid - 1; r++) { for (let c = 1; c <= w; c++) set(c, r, '.'); for (let c = N - 1 - w; c <= N - 2; c++) set(c, r, '.'); }
+        const br = rnd(3, mid - 1); for (let c = w + 1; c < N - 1 - w; c++) set(c, br, 'B');
+        for (const c of rng.shuffle([2, 3, w - 1, N - 1 - w + 1, N - 4, N - 3]).slice(0, 3)) set(c, mid, 'B');
+        for (let k = 3; k > 0; k--) set(rng.pick([rnd(1, w), rnd(N - 1 - w, N - 2)]), rnd(2, mid - 1), 'H');
         break;
       }
       case 'magma': {
-        for (let c = 0; c < N; c++) set(c, 5, 'L');
-        for (const c of rng.shuffle([2, 5, 6, 9]).slice(0, 2)) set(c, 5, 'B');
-        for (let k = 3; k > 0; k--) set(rnd(0, N - 1), rnd(2, 4), 'M');
-        for (let k = 3; k > 0; k--) set(rnd(0, N - 1), rnd(2, 4), 'L');
+        for (let c = 0; c < N; c++) set(c, mid, 'L');
+        for (const gr of rng.shuffle(groups(4)).slice(0, 2)) set(rng.pick(gr), mid, 'B');
+        for (let k = 4; k > 0; k--) set(rnd(0, N - 1), rnd(2, mid - 1), 'M');
+        for (let k = 4; k > 0; k--) set(rnd(0, N - 1), rnd(2, mid - 1), 'L');
         break;
       }
     }
+    // Condições de campo (na metade inimiga; o espelho leva para o seu lado)
+    const soft = (t) => t === '.' || t === 'F' || t === 'H' || t === 'S';
+    if (cond === 'andares') {
+      const w = rng.pick([2, 3]), r0 = rnd(1, Math.max(1, mid - 3));
+      const blocks = [rnd(1, Math.floor(cx) - w - 1), rnd(Math.ceil(cx) + 1, N - w - 1)];
+      for (const c0 of blocks) for (let r = r0; r < r0 + 2; r++) for (let c = c0; c < c0 + w; c++) if (soft(get(c, r))) set(c, r, 'U');
+      if (rng.chance(0.5)) { const c0 = Math.floor(cx) - 1; for (let c = c0; c < c0 + 2; c++) if (soft(get(c, mid - 1))) set(c, mid - 1, 'U'); }
+    } else if (cond === 'alcapoes') {
+      for (let k = rnd(4, 6); k > 0; k--) { const c = rnd(1, N - 2), r = rng.pick([mid, mid - 1, mid - 2]); if (soft(get(c, r))) set(c, r, 'T'); }
+    } else if (cond === 'buracos') {
+      for (let k = rnd(4, 6); k > 0; k--) { const c = rnd(0, N - 1), r = rnd(1, mid); if (soft(get(c, r))) set(c, r, 'O'); }
+    } else if (cond === 'estreito') {
+      for (let r = 0; r < half; r++) for (const c of [0, 1, N - 2, N - 1]) set(c, r, 'M');
+    }
     // Espelha a metade inimiga para o lado do jogador (campo justo)
     for (let r = 0; r < half; r++) for (let c = 0; c < N; c++) g[(H - 1 - r) * N + c] = g[r * N + c];
+    // Missões com estruturas: praça da cidade (atrás de você) ou pátio da fortaleza (atrás deles)
+    const plaza = (rows) => { for (const r of rows) for (let c = Math.floor(cx) - 2; c <= Math.ceil(cx) + 1; c++) g[r * N + c] = 'Z'; };
+    if (mission === 'defesa') plaza([H - 1]);
+    if (mission === 'invasao') { plaza([0]); g[N + 2] = 'Z'; g[N + N - 3] = 'Z'; }
     // Garante que os dois lados estão conectados
-    for (let tries = 0; tries < 6 && !connected(g); tries++) {
-      const c = rnd(1, N - 2);
-      for (let r = 0; r < H; r++) if (isBlocked(g[r * N + c])) g[r * N + c] = (g[r * N + c] === 'M' || g[r * N + c] === 'P') ? '.' : 'B';
+    for (let tries = 0; tries < 8 && !connected(g); tries++) {
+      const c = rnd(2, N - 3);
+      for (let r = 0; r < H; r++) if (isBlocked(g[r * N + c])) g[r * N + c] = (g[r * N + c] === 'M' || g[r * N + c] === 'P' || g[r * N + c] === 'O') ? '.' : 'B';
     }
     return g.join('');
   }
@@ -391,11 +432,12 @@
     }
     return false;
   }
-  function nearestPassable(terrain, col, row, taken) {
-    for (let rad = 0; rad < 12; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+  const noPlaceAt = (terrain, c, r) => { const t = D.TERRAIN[terrainAt(terrain, c, r)]; return !!(t && t.noPlace); };
+  function nearestPassable(terrain, col, row, taken, place) {
+    for (let rad = 0; rad < 16; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
       const c = col + dx, r = row + dy;
-      if (!tileBlocked(terrain, c, r) && !(taken && taken.has(c + ',' + r))) return { col: c, row: r };
+      if (!tileBlocked(terrain, c, r) && !(place && noPlaceAt(terrain, c, r)) && !(taken && taken.has(c + ',' + r))) return { col: c, row: r };
     }
     return { col, row };
   }
@@ -411,7 +453,7 @@
 
   /* Escala do co-op: o time tem sempre até 12 unidades, não importa se 2, 3 ou 4 jogadores */
   const CO = { count: 1.3, countPer: 0.05, stat: 1.05, statPer: 0.13, boss: 1.3, bossPer: 0.14 };
-  function generateHorde(rng, room, act, roomType, asc, terrain, players = 1, doctrineId = null) {
+  function generateHorde(rng, room, act, roomType, asc, terrain, players = 1, doctrineId = null, extraCount = 1) {
     const doc = doctrineId && roomType !== 'chefe' ? D.DOCTRINES[doctrineId] : null;
     const dmods = doc ? { ...doc.mods } : null;
     const enemies = [];
@@ -421,15 +463,15 @@
     const isBoss = roomType === 'chefe', isElite = roomType === 'elite';
     // Co-op: mais inimigos e um pouco mais fortes (o time pode ter até 12 unidades)
     const coop = players > 1, coopCount = coop ? CO.count + CO.countPer * room : 1, coopStat = coop ? CO.stat + CO.statPer * room : 1;
-    const baseCount = isBoss ? 2 + Math.floor(room * 0.26) : 2 + Math.floor(room * 0.55) + (isElite ? 1 : 0);
+    const baseCount = isBoss ? 3 + Math.floor(room * 0.33) : 3 + Math.floor(room * 0.7) + (isElite ? 1 : 0);
     const docCount = doc && doc.countMult ? (coop ? 1 + (doc.countMult - 1) * 0.5 : doc.countMult) : 1;
-    const count = Math.min(isBoss ? 12 : 26, Math.round(baseCount * coopCount * docCount));
+    const count = Math.min(isBoss ? 16 : 34, Math.round(baseCount * coopCount * docCount * (extraCount || 1)));
     const scale = (1 + (room - 1) * 0.135 + (isElite ? 0.15 : 0)) * coopStat;
 
     const cols = [...Array(C.COLS).keys()];
     const slots = [];
-    for (let r = C.PLAYER_ROW - 1; r >= 0; r--) for (const c of rng.shuffle(cols)) if (!tileBlocked(terrain, c, r)) slots.push({ col: c, row: r });
-    const lead = (isBoss || isElite) ? nearestPassable(terrain, 5, 2) : null;
+    for (let r = C.PLAYER_ROW - 1; r >= 0; r--) for (const c of rng.shuffle(cols)) if (!tileBlocked(terrain, c, r) && !noPlaceAt(terrain, c, r)) slots.push({ col: c, row: r });
+    const lead = (isBoss || isElite) ? nearestPassable(terrain, Math.floor(C.COLS / 2) - 1, 2, null, true) : null;
     const reserved = (p) => lead && p.row === lead.row && p.col === lead.col;
 
     if (isBoss) {
@@ -497,6 +539,8 @@
     solarAuraReduce: 0, ...extra
   });
 
+  function structureStats(o) { return SUMMON_STATS(o.maxHp, o.ad || 0, { ap: 0, armor: o.armor || 30, attackSpeed: o.attackSpeed || 0.01, range: o.range || 0.5, critChance: o.critChance || 0, moveSpeed: 0, maxMana: 99999, ...o.extra }); }
+
   let uidSeq = 0;
   function makeCombatant(src, team, stats, extra = {}) {
     const arch = D.ARCHETYPES[src.archetypeId] || {};
@@ -510,6 +554,7 @@
       attackCooldown: team === 'player' ? 0.3 : 0.4, attackCounter: 0, castIdx: 0, lungeX: 0, lungeY: 0,
       stun: 0, chill: 0, chillFactor: 0, burn: 0, burnDps: 0, burnExplode: 0, burnSrc: null, bleed: 0, bleedDps: 0, bleedSrc: null,
       haste: 0, hasteMult: 1.25, dead: false, auraT: 0, ss: {}, dmgDealt: 0, dmgTaken: 0, healDone: 0, kills: 0, casts: 0,
+      structure: src.structure || null, radius: src.radius || 0, animAtk: 0, animCast: 0,
       ...extra
     };
   }
@@ -525,15 +570,35 @@
     for (const p of opts.players) c.units.push(makeCombatant(p.unit, 'player', p.stats));
     const tgtMode = (D.TACTICS[c.tactic] || {}).target || null;
     for (const u of c.units) if (u.team === 'player') u.tactic = tgtMode;
-    for (const e of opts.enemies) c.units.push(makeCombatant(e.unit, 'enemy', e.stats, { ambush: !!e.unit.ambush, huntId: opts.huntId || null, isLeader: !!(e.unit.leader || e.unit.isBoss) }));
+    // v5.0: missão, estruturas (cidade, fortaleza, torres) e ondas de reforço
+    c.mission = opts.mission || 'batalha';
+    c.reserve = []; c.fortPool = []; c.waveNow = 1; c.waveMax = 1; c.lastWaveT = 0; c.nextWaveT = opts.waveDelay || 15; c.fortNext = 6;
+    for (const st of opts.structures || []) {
+      const u = makeCombatant(st.unit, st.team, st.stats);
+      c.units.push(u);
+      if (st.unit.structure === 'cidade') c.city = u;
+      if (st.unit.structure === 'forte') c.fort = u;
+    }
+    for (const e of opts.enemies) {
+      const u = makeCombatant(e.unit, 'enemy', e.stats, { ambush: !!e.unit.ambush, huntId: opts.huntId || null, isLeader: !!(e.unit.leader || e.unit.isBoss) });
+      if (e.unit.raider && c.city) u.huntUid = c.city.uid;
+      if (e.unit.fortSpawn) { c.fortPool.push(u); continue; }
+      const w = e.unit.wave || 1;
+      if (w > 1) { (c.reserve[w] = c.reserve[w] || []).push(u); c.waveMax = Math.max(c.waveMax, w); continue; }
+      c.units.push(u);
+    }
+    c.waveSize = c.units.filter(u => u.team === 'enemy' && !u.structure).length;
 
     const has = (id) => c.relics.has(id);
+    c.enterEnemy = (u) => {
+      if (u.structure) return;
+      if (has('nucleo_instavel')) { const n = Math.round(u.stats.maxHp * 0.15); u.hp = Math.max(1, u.hp - n); u.displayHp = u.hp; text(c, u.x, u.y - 0.4, `-${n} 💣`, '#f97316', 1.1); }
+      if (has('teia_arcana')) { u.chill = 4; u.chillFactor = 0.35; }
+      if (u.script === 'arconte') setArcontePhase(c, u, 'solar');
+    };
     for (const u of c.units) {
-      if (u.team === 'enemy') {
-        if (has('nucleo_instavel')) { const n = Math.round(u.stats.maxHp * 0.15); u.hp = Math.max(1, u.hp - n); u.displayHp = u.hp; text(c, u.x, u.y - 0.4, `-${n} 💣`, '#f97316', 1.1); }
-        if (has('teia_arcana')) { u.chill = 4; u.chillFactor = 0.35; }
-        if (u.script === 'arconte') setArcontePhase(c, u, 'solar');
-      } else if (has('sino_guerra')) { u.haste = 5; u.hasteMult = 1.3; }
+      if (u.team === 'enemy') c.enterEnemy(u);
+      else if (has('sino_guerra') && !u.structure) { u.haste = 5; u.hasteMult = 1.3; }
     }
     // Sombra: salto para a retaguarda adversária
     for (const u of c.units) {
@@ -546,7 +611,7 @@
   }
 
   function nearestFreeCol(c, row, pref, ignore) {
-    for (const off of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7]) {
+    for (const off of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8]) {
       const col = pref + off;
       if (col < 0 || col >= C.COLS || tileBlocked(c.terrain, col, row)) continue;
       if (!c.units.some(u => !u.dead && u.uid !== ignore && Math.floor(u.x) === col && Math.floor(u.y) === row)) return col;
@@ -622,7 +687,7 @@
 
   function dealDamage(c, att, tgt, raw, type = 'physical', crit = false, opts = {}) {
     if (!tgt || tgt.dead) return 0;
-    const forest = tileOf(c, tgt.x, tgt.y) === 'F' ? 0.15 : 0;
+    const tt = tileOf(c, tgt.x, tgt.y), forest = tt === 'F' ? 0.15 : tt === 'U' ? 0.10 : 0;
     if (type === 'physical' && !opts.noDodge && c.rng.next() < Math.min(0.75, tgt.stats.dodge + forest)) { text(c, tgt.x, tgt.y - 0.35, 'ESQUIVA', '#38bdf8', 0.9); return 0; }
     let dmg = raw * (att ? att.stats.dmgDealtMult : 1);
     if (att) {
@@ -637,7 +702,9 @@
         if (u.team === tgt.team && u.stats.guardAura > 0 && Math.hypot(u.x - tgt.x, u.y - tgt.y) <= 2.5) guard = Math.max(guard, u.stats.guardAura);
       }
       dmg *= (1 - aura) * (1 + insp) * (1 - guard);
-      if (att.stats.range > 2.3 && tileOf(c, att.x, att.y) === 'H') dmg *= 1.10;
+      const at0 = tileOf(c, att.x, att.y);
+      if (att.stats.range > 2.3 && at0 === 'H') dmg *= 1.10;
+      if (att.stats.range > 2.3 && at0 === 'U') dmg *= 1.15;
     }
     let armor = tgt.stats.armor;
     if (type === 'magic') armor *= 0.45 * (1 - (att ? att.stats.magicPen : 0));
@@ -699,7 +766,7 @@
       return;
     }
     v.dead = true; v.hp = 0;
-    if (c.fxOn) c.fx.ghosts.push({ x: v.x, y: v.y, symbol: v.symbol, color: v.color, archetypeId: v.archetypeId, isBoss: v.isBoss, isSummon: v.isSummon, team: v.team, life: 0.9, maxLife: 0.9 });
+    if (c.fxOn) c.fx.ghosts.push({ x: v.x, y: v.y, symbol: v.symbol, color: v.color, archetypeId: v.archetypeId, isBoss: v.isBoss, isSummon: v.isSummon, team: v.team, structure: v.structure, life: 0.9, maxLife: 0.9 });
     if (v.isBoss && c.fxOn) c.fx.shake = 14;
     for (const n of c.units) if (!n.dead && n.skills.ne_colheita) n.stats.ap = Math.round(n.stats.ap * (1 + 0.04 * n.skills.ne_colheita));
     particles(c, v.x, v.y, v.color, 16); shock(c, v.x, v.y, 1.0, v.color);
@@ -850,6 +917,7 @@
   };
 
   function knockback(c, s, t, dist) {
+    if (t.structure) return;
     const dx = t.x - s.x, dy = t.y - s.y, len = Math.max(0.01, Math.hypot(dx, dy));
     for (let d = 0; d < dist; d += 0.1) {
       const nx = clamp(t.x + dx / len * 0.1, 0.4, C.COLS - 0.4), ny = clamp(t.y + dy / len * 0.1, 0.4, C.ROWS - 0.4);
@@ -916,7 +984,7 @@
   function castSkill(c, s, target, isEcho = false) {
     if (!isEcho) sfx('magic');
     if (s.team === 'player' && c.relics.has('pato_borracha') && c.rng.chance(0.12)) { text(c, s.x, s.y - 0.9, 'QUACK! 🦆', '#fde047', 1.1); sfx('quack'); }
-    s.casts++;
+    s.casts++; s.animCast = 1;
     if (s.team === 'player' && c.relics.has('orbe_sobrecarga')) s.stats.ap = Math.round(s.stats.ap * 1.12);
     if (s.stats.manaRefund > 0) s.mana = Math.min(s.stats.maxMana, s.mana + s.stats.manaRefund);
     const actives = Object.keys(s.skills).filter(id => s.skills[id] > 0 && D.SKILLS[id] && D.SKILLS[id].type === 'ativa');
@@ -1015,6 +1083,7 @@
   const BACKLINE = new Set(['clerigo', 'druida', 'bardo', 'cacador', 'arcanista', 'alquimista', 'artifice', 'necromante']);
   function chooseTarget(u, opps) {
     let best = null, bd = Infinity;
+    if (u.huntUid) { const h = opps.find(o => o.uid === u.huntUid); if (h) return h; }
     if (u.huntId && !u.isSummon) { const h = opps.find(o => o.rosterId === u.huntId); if (h) return h; }
     if (u.tactic === 'back' && !u.isSummon) {
       for (const o of opps) { if (o.isSummon || !BACKLINE.has(o.archetypeId)) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < bd) { bd = d; best = o; } }
@@ -1039,21 +1108,81 @@
     return best;
   }
 
+  /* v5.0: entrada de reforços (ondas pelo norte ou pela fortaleza) */
+  function freeSpot(c, col, row) {
+    for (let rad = 0; rad < 10; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
+      const cc = col + dx, rr = row + dy;
+      if (cc < 0 || rr < 0 || cc >= C.COLS || rr >= C.ROWS || tileBlocked(c.terrain, cc, rr)) continue;
+      if (c.units.some(u => !u.dead && Math.hypot(u.x - (cc + 0.5), u.y - (rr + 0.5)) < 0.6 + (u.radius || 0))) continue;
+      return { x: cc + 0.5, y: rr + 0.5 };
+    }
+    return { x: col + 0.5, y: row + 0.5 };
+  }
+  function bringIn(c, list, near) {
+    for (const u of list) {
+      const p = near ? freeSpot(c, Math.floor(near.x + (c.rng.next() - 0.5) * 3), Math.floor(near.y) + 1) : freeSpot(c, u.startCol, Math.min(1, u.startRow % 2));
+      u.x = p.x; u.y = p.y; u.displayHp = u.hp;
+      c.units.push(u); c.enterEnemy(u);
+      particles(c, u.x, u.y, '#F2B33D', 8);
+    }
+  }
+  function updateWaves(c) {
+    const foes = c.units.filter(u => u.team === 'enemy' && !u.dead && !u.structure);
+    if (c.waveNow < c.waveMax) {
+      const nxt = c.reserve[c.waveNow + 1] || [];
+      if (c.time >= c.nextWaveT || foes.length <= Math.ceil(c.waveSize * 0.3)) {
+        c.waveNow++;
+        bringIn(c, nxt, null);
+        c.waveSize = foes.length + nxt.length; c.lastWaveT = c.time; c.nextWaveT = c.time + 16;
+        c.fx.shake = Math.max(c.fx.shake, 6);
+        FE.Bus.emit('clog', { t: `🌊 Onda ${c.waveNow} de ${c.waveMax}: ${nxt.length} inimigos entram pelo norte!`, type: 'danger' });
+        FE.Bus.emit('wave', { n: c.waveNow, of: c.waveMax, count: nxt.length });
+        sfx('bossGong');
+      }
+    }
+    if (c.fort && !c.fort.dead && c.fortPool.length && c.time >= c.fortNext) {
+      const batch = c.fortPool.splice(0, c.fortPool.length > 3 ? 2 : 1);
+      bringIn(c, batch, c.fort); c.fortNext = c.time + 7; c.lastWaveT = c.time;
+      text(c, c.fort.x, c.fort.y - 0.9, 'REFORÇOS!', '#D9483B', 1.1);
+    }
+  }
+  const pendingWaves = (c) => c.waveNow < c.waveMax;
+  /* Alçapão: quem pisa primeiro cai, sobe machucado e o alçapão vira buraco */
+  function springTrap(c, u) {
+    const col = Math.floor(u.x), row = Math.floor(u.y), i = row * C.COLS + col;
+    c.terrain = c.terrain.slice(0, i) + 'O' + c.terrain.slice(i + 1);
+    c.terrainVer = (c.terrainVer || 0) + 1;
+    particles(c, u.x, u.y, '#8A5A33', 14); shock(c, u.x, u.y, 0.9, '#8A5A33');
+    applyRaw(c, u, Math.round(u.stats.maxHp * 0.22), null, { t: 'ALÇAPÃO!', color: '#C98A12', scale: 1.1 });
+    if (u.dead) return;
+    u.stun = Math.max(u.stun, 1.6); u.wp = null;
+    const p = freeSpot(c, col, row); u.x = p.x; u.y = p.y;
+    sfx('hit', true);
+  }
+
   function updateCombat(c, dt) {
     if (c.over) return;
     c.time += dt;
-    const players = c.units.filter(u => u.team === 'player' && !u.dead && !u.isSummon);
-    const enemies = alive(c, 'enemy');
-    if (!players.length || !enemies.length) {
+    updateWaves(c);
+    const players = c.units.filter(u => u.team === 'player' && !u.dead && !u.isSummon && !u.structure);
+    let enemies = alive(c, 'enemy');
+    if (!enemies.length && pendingWaves(c)) { c.nextWaveT = 0; updateWaves(c); enemies = alive(c, 'enemy'); }
+    const cityLost = !!(c.city && c.city.dead), fortDown = !!(c.fort && c.fort.dead);
+    if (!players.length || !enemies.length || cityLost || fortDown) {
       c.over = true;
-      c.result = { won: players.length > 0, survivors: enemies.filter(e => !e.isSummon).length, time: c.time, leaderAt: c.leaderDeathAt };
+      const won = players.length > 0 && !cityLost;
+      c.result = { won, cityLost, fortDown, survivors: enemies.filter(e => !e.isSummon && !e.structure).length, time: c.time, leaderAt: c.leaderDeathAt, waves: c.waveNow };
+      if (fortDown && won) FE.Bus.emit('clog', { t: '🏰 A fortaleza caiu! Os defensores fogem em pânico.', type: 'win' });
+      if (cityLost) FE.Bus.emit('clog', { t: '🏘️ A cidade foi saqueada...', type: 'danger' });
       return;
     }
 
-    // Tempestade da Forja: evita impasses após 45s
+    // Tempestade da Forja: evita impasses (começa 35s após a última onda)
     let storm = 0;
-    if (c.time > 50) {
-      storm = (c.time - 50) * 0.004;
+    const stormAt = Math.max(55, c.lastWaveT + 35);
+    if (c.time > stormAt && !pendingWaves(c)) {
+      storm = (c.time - stormAt) * 0.004;
       if (!c.overtimeAnnounced) { c.overtimeAnnounced = true; FE.Bus.emit('clog', { t: '⛈️ Tempestade da Forja! Todos sofrem dano crescente.', type: 'danger' }); }
     }
 
@@ -1063,12 +1192,13 @@
     for (const u of units) {
       if (u.dead) continue;
       u.displayHp += (u.hp - u.displayHp) * Math.min(1, dt * 10);
+      if (u.structure && !(u.stats.ad > 0)) { if (storm > 0) applyRaw(c, u, u.stats.maxHp * storm * 1.5 * dt, null, null); continue; }
       u.lungeX *= Math.pow(0.05, dt); u.lungeY *= Math.pow(0.05, dt);
       if (!u.isSummon && u.stats.manaRegen > 0) u.mana = Math.min(u.stats.maxMana, u.mana + u.stats.manaRegen * dt);
       if (u.stats.regenPct > 0) u.hp = Math.min(u.stats.maxHp, u.hp + u.stats.maxHp * u.stats.regenPct * dt);
       const tile = tileOf(c, u.x, u.y);
       if (tile === 'L') { applyRaw(c, u, u.stats.maxHp * 0.03 * dt, null, null); if (Math.random() < dt * 3) particles(c, u.x, u.y, '#f97316', 1); if (u.dead) continue; }
-      if (storm > 0) { applyRaw(c, u, u.stats.maxHp * storm * dt, null, null); if (u.dead) continue; }
+      if (storm > 0) { applyRaw(c, u, u.stats.maxHp * storm * (u.structure ? 1.5 : 1) * dt, null, null); if (u.dead) continue; }
       if (u.burn > 0) { u.burn -= dt; applyRaw(c, u, u.burnDps * dt, u.burnSrc, null); if (Math.random() < dt * 4) particles(c, u.x, u.y, '#f97316', 1); if (u.dead) continue; }
       if (u.bleed > 0) { u.bleed -= dt; applyRaw(c, u, u.bleedDps * dt, u.bleedSrc, null); if (u.dead) continue; }
       if (u.chill > 0) { u.chill -= dt; if (u.chill <= 0) u.chillFactor = 0; }
@@ -1085,8 +1215,8 @@
       if (!tgt) continue;
       const dist = Math.hypot(tgt.x - u.x, tgt.y - u.y);
 
-      const range = u.stats.range + (u.stats.range > 2.3 && tile === 'H' ? 1 : 0);
-      if (dist <= range) {
+      const range = u.stats.range + (u.stats.range > 2.3 && tile === 'H' ? 1 : 0) + (u.stats.range > 2.3 && tile === 'U' ? 1.5 : 0);
+      if (dist - (tgt.radius || 0) <= range) {
         let mult = 1;
         if (u.archetypeId === 'berserker' && !u.isSummon) mult += (1 - u.hp / u.stats.maxHp) * 0.55;
         if (u.chill > 0) mult *= 1 - u.chillFactor;
@@ -1094,9 +1224,9 @@
         u.attackCooldown -= dt * u.stats.attackSpeed * mult;
         if (u.attackCooldown <= 0) {
           u.attackCooldown = 1.0;
-          if (!u.isSummon && u.mana >= u.stats.maxMana) { u.mana = 0; castSkill(c, u, tgt); }
+          if (!u.isSummon && !u.structure && u.mana >= u.stats.maxMana) { u.mana = 0; castSkill(c, u, tgt); }
           else {
-            u.attackCounter++;
+            u.attackCounter++; u.animAtk = 1;
             const crit = c.rng.next() < u.stats.critChance;
             const dmg = u.stats.ad * (crit ? u.stats.critDmg : 1);
             if (!u.isSummon) u.mana = Math.min(u.stats.maxMana, u.mana + u.stats.manaPerAttack);
@@ -1128,12 +1258,13 @@
         for (const o of c.units) {
           if (o.dead || o === u) continue;
           const ox = u.x - o.x, oy = u.y - o.y, od = Math.hypot(ox, oy);
-          if (od > 0.001 && od < 0.7) { const push = (0.7 - od) * 3.2; vx += ox / od * push; vy += oy / od * push; }
+          const lim = 0.7 + (o.radius || 0); if (od > 0.001 && od < lim) { const push = (lim - od) * 3.2; vx += ox / od * push; vy += oy / od * push; }
         }
         const nx = clamp(u.x + vx * dt, 0.4, C.COLS - 0.4), ny = clamp(u.y + vy * dt, 0.4, C.ROWS - 0.4);
         if (!blockedAt(c, nx, ny)) { u.x = nx; u.y = ny; }
         else if (!blockedAt(c, nx, u.y)) u.x = nx;
         else if (!blockedAt(c, u.x, ny)) u.y = ny;
+        if (tileOf(c, u.x, u.y) === 'T') springTrap(c, u);
       }
     }
 
@@ -1157,12 +1288,12 @@
     for (let i = f.slashes.length - 1; i >= 0; i--) { f.slashes[i].life -= dt; if (f.slashes[i].life <= 0) f.slashes.splice(i, 1); }
     for (let i = f.ghosts.length - 1; i >= 0; i--) { const g = f.ghosts[i]; g.y -= dt * 0.6; g.life -= dt; if (g.life <= 0) f.ghosts.splice(i, 1); }
     f.shake = Math.max(0, f.shake - dt * 30);
-    for (const u of c.units) if (u.flash > 0) u.flash -= dt;
+    for (const u of c.units) { if (u.flash > 0) u.flash -= dt; if (u.animAtk > 0) u.animAtk = Math.max(0, u.animAtk - dt * 3.4); if (u.animCast > 0) u.animCast = Math.max(0, u.animCast - dt * 1.9); }
   }
 
   /* Relatório pós-combate por unidade do jogador (invocações creditadas ao dono) */
   function combatReport(c) {
-    return c.units.filter(u => u.team === 'player' && !u.isSummon).map(u => ({
+    return c.units.filter(u => u.team === 'player' && !u.isSummon && !u.structure).map(u => ({
       rosterId: u.rosterId, name: u.name, symbol: u.symbol, color: u.color,
       dmgDealt: Math.round(u.dmgDealt), dmgTaken: Math.round(u.dmgTaken), healDone: Math.round(u.healDone),
       kills: u.kills, casts: u.casts, survived: !u.dead
@@ -1194,6 +1325,6 @@
     unitPower, teamPower,
     computeStats, synergyTier, orderTier, generateActMap, generateHorde, rollAffix,
     generateTerrain, terrainAt, tileBlocked, nearestPassable, COOP_SCALE: CO,
-    createCombat, updateCombat, updateFx, combatReport
+    createCombat, updateCombat, updateFx, combatReport, structureStats, rollScenario
   };
 })(typeof window !== 'undefined' ? window : globalThis);

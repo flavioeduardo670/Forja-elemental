@@ -157,6 +157,29 @@
     return L;
   }
 
+
+  /* Easter egg GALINHA: galinha (inimiga comum) e galo (chefe) */
+  function chickenLayers(key) {
+    const galo = key === 'c_galo';
+    const L = [
+      { f: 'ring', s: 'O', w: 1.2, d: ell(0, -1, 11, 4.4) },
+      { s: '#E8902A', w: 2, d: 'M-4 -2V-9M4 -2V-9M-6 -1H-2M2 -1H6' },
+      galo ? { f: '#1F5C4A', s: 'O', w: 1.2, d: 'M-8 -20Q-22 -36 -16 -46Q-12 -32 -4 -24ZM-9 -17Q-24 -24 -24 -36Q-14 -26 -5 -20Z' }
+           : { f: '#FFFFFF', s: 'O', w: 1.2, d: 'M-8 -18L-16 -30L-6 -24Z' },
+      { f: galo ? '#C9792E' : '#FFFFFF', s: 'O', w: 1.4, d: ell(0, -16, 10, 8.5) },
+      { f: galo ? '#A65E22' : '#E9EDF3', s: 'O', w: 1.1, d: ell(-1, -16, 6, 4.5) },
+      { f: 'acc', d: 'M-9 -12H9V-10H-9Z', o: 0.9 },
+      { f: galo ? '#E0A050' : '#FFFFFF', s: 'O', w: 1.4, d: circ(3, -29, 6.5) },
+      { f: '#E23B3B', s: 'O', w: 1, d: galo ? 'M-2 -34Q0 -44 3 -36Q5 -45 7 -36Q10 -43 10 -33Z' : 'M0 -34Q2 -40 4 -35Q6 -40 8 -34Z' },
+      { f: '#F2A93B', s: 'O', w: 1, d: 'M9 -30L15 -28L9 -26Z' },
+      { f: '#E23B3B', d: ell(9, -24, 1.6, 2.4) },
+      { f: 'O', d: circ(5, -30, 1.3) },
+      { s: 'O', w: 1.4, d: 'M2.5 -33.5L7 -32' }
+    ];
+    if (galo) L.push({ f: 'gold', s: 'O', w: 1, d: 'M-2 -46L0 -51L2 -47L4 -52L6 -47L8 -51L10 -46Z' });
+    return L;
+  }
+
   function palette(team, acc, o = {}) {
     const enemy = team === 'e';
     return {
@@ -167,6 +190,7 @@
   }
 
   function layersFor(key, team) {
+    if (key && key.startsWith('c_')) return chickenLayers(key);
     if (key && key.startsWith('b_')) return bossLayers(key);
     if (key && key.startsWith('s_')) return SUMMONS[key] || SUMMONS.s_avatar;
     return BASE.concat(team === 'e' ? FACE_E : FACE_P, PROPS[key] || []);

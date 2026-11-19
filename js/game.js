@@ -111,7 +111,7 @@
     const cap = n > 1 ? C.COOP_TOTAL_UNITS / n : C.MAX_TEAM;
     const gf = n > 1 ? 2 / n : 1;
     G.run = {
-      v: 4, seed: seedStr, rngState: seedNum, ascension: asc, daily: daily ? daily.date : null,
+      v: 5, seed: seedStr, rngState: seedNum, ascension: asc, daily: daily ? daily.date : null,
       act: 1, room: 0, nodeId: null, visited: [], map: null,
       roomType: 'combate', affix: 'padrao', enemies: [], attempt: 0,
       citadelHp: citadelMax, citadelMax, nextUnitId: 1,
@@ -149,11 +149,11 @@
     G.emitAch({ type: 'state' });
     FE.Storage.set(C.SAVE_KEY_RUN, G.run);
   };
-  G.hasSave = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return !!(s && s.v === 4 && s.phase !== 'END'); };
-  G.savedSummary = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return s && s.v === 4 ? s : null; };
+  G.hasSave = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return !!(s && s.v === 5 && s.phase !== 'END'); };
+  G.savedSummary = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return s && s.v === 5 ? s : null; };
   G.loadRun = function () {
     const s = FE.Storage.get(C.SAVE_KEY_RUN);
-    if (!s || s.v !== 4) return false;
+    if (!s || s.v !== 5) return false;
     if (s.phase === 'COMBAT') s.phase = 'PREP';
     s.players.forEach(p => { p.ready = false; });
     G.run = s;
@@ -209,18 +209,23 @@
   /* ---------------- ROSTER ---------------- */
   const P0 = C.PLAYER_ROW;
   G.blocked = (col, row) => E.tileBlocked(G.run.terrain, col, row);
+  G.noPlace = (col, row) => { const t = D.TERRAIN[E.terrainAt(G.run.terrain, col, row)]; return !!(t && (t.blocked || t.noPlace)); };
+  /* Colunas do centro para as bordas (16 colunas) */
+  const COL_ORDER = (() => { const m = C.COLS / 2, out = []; for (let i = 0; i < C.COLS; i++) { out.push(m - 1 - i); out.push(m + i); } return out.filter(c => c >= 0 && c < C.COLS); })();
+  const PLAYER_ROWS = [...Array(C.ROWS - P0).keys()].map(i => P0 + i);
+  /* Limite em campo nesta sala (condições como Desfiladeiro reduzem) */
+  G.fieldLimit = (p) => { const r = G.run; const pen = r ? (r.capPenalty || 0) : 0; return Math.max(1, p.teamLimit - pen); };
   function freeBoardTile() {
-    const cols = [5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0, 11];
-    for (const r of [P0 + 1, P0 + 2, P0, P0 + 3, P0 + 4, P0 + 5]) for (const c of cols) if (!G.blocked(c, r) && !G.run.board.some(u => u.col === c && u.row === r)) return { col: c, row: r };
+    for (const r of [P0 + 1, P0 + 2, P0, ...PLAYER_ROWS.slice(3)]) for (const c of COL_ORDER) if (!G.noPlace(c, r) && !G.run.board.some(u => u.col === c && u.row === r)) return { col: c, row: r };
     return null;
   }
   function relocateBlocked() {
-    const taken = new Set(G.run.board.filter(u => !G.blocked(u.col, u.row)).map(u => u.col + ',' + u.row));
+    const taken = new Set(G.run.board.filter(u => !G.noPlace(u.col, u.row)).map(u => u.col + ',' + u.row));
     for (const u of G.run.board) {
-      if (!G.blocked(u.col, u.row)) continue;
+      if (!G.noPlace(u.col, u.row)) continue;
       let best = null, bd = Infinity;
       for (let r = P0; r < C.ROWS; r++) for (let c = 0; c < C.COLS; c++) {
-        if (G.blocked(c, r) || taken.has(c + ',' + r)) continue;
+        if (G.noPlace(c, r) || taken.has(c + ',' + r)) continue;
         const d = Math.hypot(c - u.col, r - u.row); if (d < bd) { bd = d; best = { c, r }; }
       }
       if (best) { u.col = best.c; u.row = best.r; taken.add(best.c + ',' + best.r); }
@@ -376,7 +381,7 @@
     if (!G.canEdit()) return false;
     const r = G.run;
     if (row < P0 || row >= C.ROWS || col < 0 || col >= C.COLS) return false;
-    if (G.blocked(col, row)) { toast(`${D.TERRAIN[E.terrainAt(r.terrain, col, row)].name}: não é possível posicionar aqui.`, 'error'); return false; }
+    if (G.noPlace(col, row)) { toast(`${D.TERRAIN[E.terrainAt(r.terrain, col, row)].name}: não é possível posicionar aqui.`, 'error'); return false; }
     const u = G.find(id); if (!guardOwner(u)) return false;
     const p = G.ownerOf(u);
     const occ = r.board.find(x => x.col === col && x.row === row && x.id !== id);
@@ -389,7 +394,7 @@
         r.board = r.board.filter(x => x !== occ); occ.col = occ.row = -1; p.bench[si] = occ;
       } else {
         if (occ) { toast(`Essa casa está ocupada por uma unidade de ${G.ownerOf(occ).name}.`, 'error'); return false; }
-        if (G.boardOf(p.id).length >= p.teamLimit) { toast(`Limite atingido (${G.boardOf(p.id).length}/${p.teamLimit}).`, 'error'); return false; }
+        if (G.boardOf(p.id).length >= G.fieldLimit(p)) { toast(`Limite em campo atingido (${G.boardOf(p.id).length}/${G.fieldLimit(p)})${r.capPenalty && r.phase === 'PREP' ? ` — ${D.CONDITIONS[r.cond].name}` : ''}.`, 'error'); return false; }
         p.bench[si] = null;
       }
       u.col = col; u.row = row; r.board.push(u);
@@ -434,15 +439,15 @@
     if (!mine.length) return;
     const rowsByPref = { front: [P0, P0 + 1], flank: [P0, P0 + 1], mid: [P0 + 1, P0 + 2, P0], back: [P0 + 4, P0 + 3, P0 + 5, P0 + 2] };
     const order = ['front', 'flank', 'mid', 'back'];
-    const cols = [5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0, 11];
+    const cols = COL_ORDER;
     const taken = new Set(G.run.board.filter(u => !G.isMine(u)).map(u => u.col + ',' + u.row));
     const units = mine.sort((a, b) => order.indexOf(G.arch(a).pref) - order.indexOf(G.arch(b).pref));
     for (const u of units) {
       const pref = G.arch(u).pref;
-      const colOrder = pref === 'flank' ? [1, 10, 2, 9, 0, 11, 3, 8, 4, 7, 5, 6] : cols;
+      const colOrder = pref === 'flank' ? COL_ORDER.slice().reverse() : cols;
       let placed = false;
-      for (const row of [...rowsByPref[pref], P0, P0 + 1, P0 + 2, P0 + 3, P0 + 4, P0 + 5]) {
-        for (const col of colOrder) { const k = col + ',' + row; if (!taken.has(k) && !G.blocked(col, row)) { taken.add(k); u.col = col; u.row = row; placed = true; break; } }
+      for (const row of [...rowsByPref[pref], ...PLAYER_ROWS]) {
+        for (const col of colOrder) { const k = col + ',' + row; if (!taken.has(k) && !G.noPlace(col, row)) { taken.add(k); u.col = col; u.row = row; placed = true; break; } }
         if (placed) break;
       }
     }
@@ -548,6 +553,55 @@
   G.leader = () => G.P(G.run.turn % G.coop());
   function nextChooser() { const pid = G.run.turn % G.coop(); G.run.turn++; return pid; }
 
+  /* v5.0: tira do campo quem passar do limite da sala (vai para o banco) */
+  function enforceFieldLimit() {
+    const r = G.run;
+    for (const p of r.players) {
+      const mine = G.boardOf(p.id), lim = G.fieldLimit(p);
+      if (mine.length <= lim) continue;
+      const extra = [...mine].sort((a, b) => (b.row * 20 + b.col) - (a.row * 20 + a.col)).slice(0, mine.length - lim);
+      let moved = 0;
+      for (const u of extra) { const fb = freeBench(p); if (fb === -1) break; r.board = r.board.filter(x => x !== u); u.col = u.row = -1; p.bench[fb] = u; moved++; }
+      if (moved) log(`${D.CONDITIONS[r.cond].icon} ${D.CONDITIONS[r.cond].name}: ${moved} unidade(s) de ${p.name} voltaram para o banco (limite ${lim}).`, 'danger');
+    }
+  }
+  /* v5.0: ondas, saqueadores, reforços da fortaleza e estruturas da missão */
+  function assignScenario(rng) {
+    const r = G.run, N = C.COLS, H = C.ROWS, m = r.mission;
+    r.structures = [];
+    const foes = r.enemies.filter(e => !e.isBoss && !e.isElite).sort((a, b) => b.row - a.row);
+    const split = (fr) => { let i = 0; fr.forEach((f, w) => { const n = w === fr.length - 1 ? foes.length - i : Math.round(foes.length * f); for (let k = 0; k < n && i < foes.length; k++) foes[i++].wave = w + 1; }); };
+    if (m === 'ondas') split(rng.chance(0.5) || r.roomType === 'chefe' ? [0.5, 0.5] : [0.4, 0.3, 0.3]);
+    if (m === 'defesa') {
+      split([0.4, 0.3, 0.3]);
+      const fast = new Set(['sombra', 'berserker', 'cacador', 'lanceiro', 'monge']);
+      for (const e of foes) if (fast.has(e.archetypeId) ? rng.chance(0.55) : rng.chance(0.2)) e.raider = true;
+      r.structures.push({ structure: 'cidade', team: 'player', x: N / 2, y: H - 0.5, radius: 1.25, name: 'Cidade de Pedravale' });
+    }
+    if (m === 'invasao') {
+      foes.slice().reverse().slice(0, Math.round(foes.length * 0.3)).forEach(e => { e.fortSpawn = true; });
+      r.structures.push({ structure: 'forte', team: 'enemy', x: N / 2, y: 0.55, radius: 1.3, name: 'Fortaleza Inimiga' });
+      r.structures.push({ structure: 'torre', team: 'enemy', x: 2.5, y: 1.5, radius: 0.4, name: 'Torre de Arqueiros' });
+      r.structures.push({ structure: 'torre', team: 'enemy', x: N - 2.5, y: 1.5, radius: 0.4, name: 'Torre de Arqueiros' });
+    }
+  }
+  /* Atributos das estruturas a partir da horda já escalada */
+  function structureUnits() {
+    const r = G.run;
+    if (!r.structures || !r.structures.length) return [];
+    const st = r.enemies.map(e => G.enemyStats(e));
+    const sumHp = st.reduce((a, s) => a + s.maxHp, 0), avgAd = st.reduce((a, s) => a + s.ad, 0) / Math.max(1, st.length);
+    const act = r.act;
+    return r.structures.map((s, i) => {
+      const o = s.structure === 'cidade' ? { maxHp: Math.round(sumHp * 0.2), armor: 40 + act * 8 }
+        : s.structure === 'forte' ? { maxHp: Math.round(sumHp * 0.28), armor: 30 + act * 8, extra: { magicReduce: 0.1 } }
+        : { maxHp: Math.round(sumHp * 0.07), ad: Math.round(avgAd * 1.15), armor: 30 + act * 6, attackSpeed: 0.8, range: 4.8, critChance: 0.1 };
+      return { team: s.team, unit: { id: `st${i}`, name: s.name, archetypeId: s.structure === 'torre' ? 'cacador' : 'vanguarda', structure: s.structure, radius: s.radius,
+        col: s.x - 0.5, row: s.y - 0.5, level: Math.max(1, Math.floor(r.room / 2)), color: s.team === 'player' ? '#C98A12' : '#D9483B', symbol: s.structure === 'cidade' ? '🏘️' : s.structure === 'forte' ? '🏰' : '🗼' },
+        stats: E.structureStats(o) };
+    });
+  }
+
   G.chooseNode = function (id) {
     const r = G.run;
     if (r.phase !== 'MAP') return;
@@ -561,21 +615,30 @@
     if (['combate', 'elite', 'chefe'].includes(node.type)) {
       r.roomType = node.type; r.affix = node.affix; r.attempt = 0;
       r.layout = node.layout || 'planicie';
-      r.terrain = withRng(rng => E.generateTerrain(rng, r.layout, r.act));
+      r.mission = node.mission || 'batalha'; r.cond = node.cond || 'nenhuma';
+      const capN = (D.CONDITIONS[r.cond] || {}).cap || 0;
+      r.capPenalty = G.isCoop() ? Math.floor(capN / G.coop() + 0.25) : capN;
+      r.terrain = withRng(rng => E.generateTerrain(rng, r.layout, r.act, r.cond, r.mission));
       relocateBlocked();
+      enforceFieldLimit();
       r.doctrine = node.type === 'chefe' ? null : pickDoctrine();
-      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain, G.coop(), r.doctrine));
-      if (r.flags.galinha) r.enemies.forEach(e => { e.symbol = e.isBoss ? '🐓' : '🐔'; if (!e.isBoss) e.name = 'Galinha ' + e.name.split(' ')[0]; });
+      const extra = { ondas: 1.3, defesa: 1.35, invasao: 1.2 }[r.mission] || 1;
+      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain, G.coop(), r.doctrine, extra));
+      withRng(rng => assignScenario(rng));
+      if (r.flags.galinha) r.enemies.forEach(e => { e.symbol = e.isBoss ? '🐓' : '🐔'; e.name = e.isBoss ? 'Galo ' + e.name : 'Galinha ' + e.name.split(' ')[0]; });
       applyScaling(node.type);
       applyIntel();
       r.objective = pickObjective(node.type);
       log(`🗺️ Terreno: ${D.LAYOUTS[r.layout].icon} ${D.LAYOUTS[r.layout].name} — ${D.LAYOUTS[r.layout].desc}`);
+      const ms = D.MISSIONS[r.mission], cd = D.CONDITIONS[r.cond];
+      log(`${ms.icon} Missão: ${ms.name} — ${ms.desc}`, r.mission === 'batalha' ? undefined : 'level');
+      if (r.cond !== 'nenhuma') log(`${cd.icon} Condição: ${cd.name} — ${cd.desc}`, 'level');
       r.phase = 'PREP';
       if (node.type === 'chefe') { sfx('bossGong'); log(`👑 ${D.BOSSES[r.act].name}: ${D.BOSSES[r.act].mechanic}`, 'danger'); }
       G.save(); changed();
       if (G.totalEvo() > 0) FE.Bus.emit('openEvo');
     } else {
-      r.affix = 'padrao'; r.enemies = [];
+      r.affix = 'padrao'; r.enemies = []; r.structures = []; r.capPenalty = 0; r.mission = null; r.cond = null;
       if (G.hasRelic('bussola_explorador')) { r.players.forEach(p => { p.gold += Math.round(25 * G.goldFactor()); }); log('🧭 Bússola: ouro extra para todos.', 'gold'); }
       const pid = nextChooser();
       const ev = withRng(rng => buildEvent(node.type, rng));
@@ -606,7 +669,7 @@
     const r = G.run;
     if (r.phase !== 'PREP') return;
     if (!r.board.length) return toast('Coloque pelo menos 1 unidade em campo.', 'error');
-    for (const p of r.players) if (G.boardOf(p.id).length > p.teamLimit) return toast(`${p.name} tem unidades demais em campo.`, 'error');
+    for (const p of r.players) if (G.boardOf(p.id).length > G.fieldLimit(p)) return toast(`${p.name} tem unidades demais em campo (limite ${G.fieldLimit(p)} nesta sala).`, 'error');
     G.save();
     const ctxs = r.players.map(p => G.statsCtx(p.id));
     G.combat = E.createCombat({
@@ -614,7 +677,8 @@
       relics: new Set(r.relics), affix: r.affix, fx: G.settings ? G.settings.fx !== false : true, terrain: r.terrain,
       players: r.board.map(u => ({ unit: { ...u }, stats: G.statsOf(u, ctxs[u.owner || 0]) })),
       enemies: r.enemies.map(e => ({ unit: e, stats: G.enemyStats(e) })),
-      tactic: r.tactic, antiHeal: r.intel ? r.intel.antiHeal : 0, huntId: r.intel ? r.intel.huntId : null
+      tactic: r.tactic, antiHeal: r.intel ? r.intel.antiHeal : 0, huntId: r.intel ? r.intel.huntId : null,
+      mission: r.mission || 'batalha', structures: structureUnits()
     });
     G.combat.startBoard = r.board.length; G.combat.startSyn = G.activeSynergies();
     r.phase = 'COMBAT'; r.stats.combats++; G.paused = false;
@@ -639,7 +703,7 @@
     const all = [];
     for (const p of G.run.players) {
       const ctx = G.statsCtx(p.id, true);
-      all.push(...G.unitsOf(p.id).map(u => E.unitPower(G.statsOf(u, ctx))).sort((a, b) => b - a).slice(0, p.teamLimit));
+      all.push(...G.unitsOf(p.id).map(u => E.unitPower(G.statsOf(u, ctx))).sort((a, b) => b - a).slice(0, G.fieldLimit(p)));
     }
     const sum = all.reduce((a, b) => a + b, 0);
     return Math.round(sum * sum / 100);
@@ -651,7 +715,7 @@
     const t = (SC.targets[type] || SC.targets.combate)[Math.min(3, r.act - 1)];
     return t * (root.__diff || SC.diff) * (1 + SC.ascPer * r.ascension) * G.coopFactor() * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
   };
-  G.coopFactor = () => { const r = G.run, n = r.players.length; return n > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (n === 2 ? 1.15 : n === 3 ? 1.85 : 1.45) : 1; };
+  G.coopFactor = () => { const r = G.run, n = r.players.length; return n > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (n === 2 ? 1.05 : n === 3 ? 0.95 : 1.45) : 1; };
   G.setScaling = function (mode) {
     if (!G.run || !SC.modes[mode]) return;
     G.run.scaling = mode;
@@ -680,7 +744,7 @@
     } else if (mode === 'proporcional' || mode === 'dinamica') {
       const dt = r.doctrine && D.DOCTRINES[r.doctrine] ? D.DOCTRINES[r.doctrine].tune || 1 : 1;
       const coopTune = r.players.length > 1 && r.doctrine && r.doctrine !== 'bando' ? 0.72 * (1 + (dt - 1) * 0.35) * (D.DOCTRINES[r.doctrine].coopTune || 1) : dt;
-      const target = G.targetRatio(type) * coopTune;
+      const target = G.targetRatio(type) * coopTune * ((D.MISSIONS[r.mission] || {}).tune || 1) * ((D.CONDITIONS[r.cond] || {}).tune || 1);
       const k = Math.max(SC.kMin, Math.min(SC.kMax, Math.sqrt(target * pp / Math.max(1, ep0))));
       for (const e of r.enemies) {
         const b = e.baseStats;
@@ -778,9 +842,9 @@
   };
   function pickObjective(type) {
     const r = G.run;
-    const lim = r.players.reduce((s, p) => s + p.teamLimit, 0);
+    const lim = r.players.reduce((s, p) => s + G.fieldLimit(p), 0);
     const list = [
-      { id: 'blitz', p: type === 'chefe' ? 32 : type === 'elite' ? 20 : 15 },
+      ...(r.mission && r.mission !== 'batalha' ? [] : [{ id: 'blitz', p: type === 'chefe' ? 32 : type === 'elite' ? 20 : 15 }]),
       { id: 'intacto' },
       { id: 'vitalidade', p: type === 'chefe' ? 35 : 55 },
       { id: 'prisma', p: Math.min(5, 2 + Math.floor(r.act / 2)) }
@@ -877,7 +941,7 @@
 
   function finishCombat(c) {
     const r = G.run;
-    const res = c.result;
+    const res = c.result; G.__lastTime = res.time;
     const report = E.combatReport(c).map(x => { const u = G.find(x.rosterId); return { ...x, owner: u ? (u.owner || 0) : 0 }; });
     G.emitAch({ type: 'combat', won: res.won, time: res.time, report, roomType: r.roomType, room: r.room, act: r.act, layout: r.layout,
       boardSize: r.board.length, losses: report.filter(x => !x.survived).length, maxSummons: c.maxPlayerSummons, coop: G.coop() });
@@ -923,7 +987,7 @@
 
     if (res.won) {
       sfx('victory');
-      r.stats.wins++;
+      r.stats.wins++; r.capPenalty = 0;
       const gold = Math.round(goldBase(r.roomType, r.room) * gf * rm);
       for (const p of r.players) {
         const interest = Math.min(C.INTEREST_CAP, Math.floor(p.gold * C.INTEREST_RATE));
@@ -945,6 +1009,8 @@
       }
       if (objDone && r.objective.reward.kind === 'item') for (const p of r.players) giveItem(p.id, rollItem(r.objective.reward.tier), 'Objetivo bônus');
       if (objDone) log(`🎖️ Objetivo cumprido: ${G.objectiveText(r.objective)} (${r.objective.reward.text}).`, 'win');
+      if (r.mission === 'defesa') { const bonus = Math.round(gold * 0.5); for (const p of r.players) { p.gold += bonus; r.stats.goldEarned += bonus; } rewards.extras.push({ icon: '🏘️', text: `A cidade agradece: +${bonus}g${G.isCoop() ? ' cada' : ''}.` }); }
+      if (r.mission === 'invasao') { giveItem(nextChooser(), rollItem(r.act >= 3 ? 2 : 1), res.fortDown ? 'Tesouro da fortaleza' : 'Saque da base'); }
       if (r.roomType === 'elite') { r.stats.elites++; giveItem(nextChooser(), rollItem(1), 'Item de Elite'); pend.push(makeRelicChoice('elite')); rewards.relic = 'elite'; }
       if (G.hasRelic('ovo_dourado')) {
         r.flags.eggWins++;

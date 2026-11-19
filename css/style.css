@@ -344,7 +344,8 @@ canvas { display: block; width: 100%; height: 100%; cursor: pointer; touch-actio
 .pause-overlay small { font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary); letter-spacing: 0; }
 .pause-overlay.show { display: flex; }
 .brand-icon { cursor: pointer; user-select: none; }
-.brand-icon.hit { animation: anvilHit .18s ease-out; }
+.brand-icon.hit, .brand-mark.hit, #title-logo.hit { animation: anvilHit .18s ease-out; }
+.brand-mark { cursor: pointer; }
 @keyframes anvilHit { 0% { transform: scale(1) rotate(0); } 40% { transform: scale(.85) rotate(-8deg); } 100% { transform: scale(1) rotate(0); } }
 .title-hero .logo { cursor: pointer; }
 .spark { position: fixed; width: 6px; height: 6px; border-radius: 50%; background: #B7791F; box-shadow: 0 0 8px #f59e0b; pointer-events: none; z-index: 500; animation: spark .9s ease-out forwards; }
@@ -980,3 +981,55 @@ h1, h2, h3, h4, .disp, #modal-title, .panel-title, .dock-title { font-family: va
 @media (max-width: 760px) { .cam-hint { display: none; } }
 .canvas-container .board-overlay, .canvas-container .pause-overlay { z-index: 6; }
 .canvas-container .combat-banner, .canvas-container .boss-bar { z-index: 7; }
+
+/* ==========================================================================
+   v5.0 — INTERFACE COMPACTA: painéis recolhíveis, tela ampla no combate
+   ========================================================================== */
+.left-col, .right-col { position: sticky; }
+.side-card { position: relative; }
+.card-min { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 7px; border: none; background: #F1F4F8; cursor: pointer; display: grid; place-items: center; z-index: 2; transition: background .15s; }
+.card-min:hover { background: #E3E9F1; }
+.card-min i { width: 10px; height: 2px; background: #7A8496; border-radius: 2px; position: relative; }
+.side-card.collapsed .card-min i::after { content: ''; position: absolute; left: 4px; top: -4px; width: 2px; height: 10px; background: #7A8496; border-radius: 2px; }
+.side-card.collapsed { padding-top: 10px; padding-bottom: 10px; gap: 0; }
+.side-card.collapsed > *:not(:first-child):not(.card-min):not(.col-hide) { display: none !important; }
+.side-card .seg-tabs, .side-card > .panel-header, .side-card > .bag-head { margin-right: 28px; }
+.left-col > .card:first-of-type .card-min { top: 13px; }
+.col-hide { align-self: flex-end; width: 26px; height: 22px; margin-bottom: -4px; border: none; border-radius: 8px; background: rgba(255,255,255,.85); box-shadow: 0 1px 3px rgba(30,36,51,.12); color: #5B6578; font: 800 16px/1 Nunito, sans-serif; cursor: pointer; }
+.right-col .col-hide { align-self: flex-start; }
+.col-hide:hover { background: #fff; color: #1E2433; }
+.col-show { display: none; position: fixed; top: 50%; transform: translateY(-50%); z-index: 30; border: none; cursor: pointer; background: #fff; box-shadow: 0 6px 18px -6px rgba(30,36,51,.35); padding: 12px 7px; color: #1E2433; font: 800 11px Nunito, sans-serif; letter-spacing: .04em; flex-direction: column; align-items: center; gap: 8px; }
+.col-show em { font-style: normal; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; color: #5B6578; }
+.col-show span { font-size: 12px; color: #13897C; }
+.col-show.left { left: 0; border-radius: 0 12px 12px 0; }
+.col-show.right { right: 0; border-radius: 12px 0 0 12px; }
+.col-show.right em { transform: none; }
+.col-show:hover em { color: #1E2433; }
+body.left-min .left-col, body.right-min .right-col { display: none; }
+body.left-min .col-show.left, body.right-min .col-show.right { display: flex; }
+body.left-min .workspace { grid-template-columns: minmax(520px, 1fr) 330px; }
+body.right-min .workspace { grid-template-columns: 290px minmax(520px, 1fr); }
+body.left-min.right-min .workspace { grid-template-columns: minmax(0, 1fr); }
+body.wide-board .center-col > * { max-width: 1240px; }
+body.wide-board .canvas-container { max-width: 1240px; }
+body.left-min.right-min .center-col > *, body.left-min.right-min .canvas-container { max-width: 1380px; }
+body.combat-wide .canvas-container { aspect-ratio: 1.75 / 1; max-height: calc(100vh - 230px); }
+@media (max-width: 1280px) { body.right-min .workspace, body.left-min .workspace { grid-template-columns: 1fr; } }
+/* dock recolhível */
+.dock { position: relative; }
+.dock-min { position: absolute; top: -12px; right: 32px; z-index: 3; height: 24px; padding: 0 12px 0 10px; border: none; border-radius: 12px; background: #fff; box-shadow: 0 3px 10px -3px rgba(30,36,51,.3); cursor: pointer; display: flex; align-items: center; gap: 6px; font: 800 11px Nunito, sans-serif; color: #5B6578; }
+.dock-min i { width: 8px; height: 8px; border-right: 2px solid #7A8496; border-bottom: 2px solid #7A8496; transform: rotate(45deg) translateY(-2px); }
+.dock-min .dm-closed { display: none; }
+body.dock-min .dock-min .dm-open { display: none; } body.dock-min .dock-min .dm-closed { display: inline; }
+body.dock-min .dock-min i { transform: rotate(-135deg) translate(-2px, -1px); }
+body.dock-min .dock { padding-top: 6px; padding-bottom: 6px; }
+body.dock-min .dock > div { display: none; }
+body.dock-min .dock-min { position: static; margin: 0 auto; }
+body.combat-wide .dock { display: none; }
+body.combat-wide .tactic-bar { display: none !important; }
+/* banner de onda */
+.combat-banner.wave { color: #fff; background: linear-gradient(135deg, #3B6FD6, #2B4FA6); }
+.combat-banner small { display: block; font-size: 14px; letter-spacing: .02em; opacity: .9; font-weight: 700; margin-top: 2px; }
+/* briefing mais enxuto */
+.bf-chips { flex-wrap: wrap; }
+.bf-chip small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; display: block; }

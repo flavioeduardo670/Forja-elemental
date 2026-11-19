@@ -132,14 +132,18 @@
     phase.textContent = txt; phase.className = cls;
     const nt = D.NODE_TYPES[r.roomType];
     if (r.phase === 'PREP' || r.phase === 'COMBAT') {
-      room.textContent = `${nt.icon} ${nt.name} • ${r.enemies.length} inimigo(s)`;
-      room.className = r.roomType === 'combate' ? 'chip' : 'chip danger';
-      room.removeAttribute('data-tip');
+      const ms = D.MISSIONS[r.mission || 'batalha'];
+      const wv = r.phase === 'COMBAT' && G.combat && G.combat.waveMax > 1 ? ` • Onda ${G.combat.waveNow}/${G.combat.waveMax}` : '';
+      room.textContent = `${ms.icon} ${r.roomType === 'combate' ? ms.name : nt.name} • ${r.enemies.length} inimigos${wv}`;
+      room.className = r.roomType === 'combate' && r.mission === 'batalha' ? 'chip' : 'chip danger';
+      room.setAttribute('data-tip', `<b>${ms.icon} ${ms.name}</b><br>${ms.desc}`);
       if (r.roomType === 'chefe') room.setAttribute('data-tip', `<b>${D.BOSSES[r.act].symbol} ${D.BOSSES[r.act].name}</b><br>${D.BOSSES[r.act].mechanic}`);
     } else { room.textContent = '🗺️ Entre salas'; room.className = 'chip'; }
     const lay = D.LAYOUTS[r.layout] || D.LAYOUTS.planicie;
     const present = [...new Set(r.terrain.split(''))].filter(t => t !== '.').map(t => `${D.TERRAIN[t].icon} <b>${D.TERRAIN[t].name}:</b> ${D.TERRAIN[t].desc}`);
-    $('terrain-chip').textContent = `${lay.icon} ${lay.name}`;
+    const cd = r.cond && r.cond !== 'nenhuma' && (r.phase === 'PREP' || r.phase === 'COMBAT') ? D.CONDITIONS[r.cond] : null;
+    $('terrain-chip').textContent = `${lay.icon} ${lay.name}${cd ? ` · ${cd.icon} ${cd.name}` : ''}`;
+    if (cd) present.unshift(`${cd.icon} <b>${cd.name}:</b> ${cd.desc}`);
     $('terrain-chip').setAttribute('data-tip', `<b>Terreno: ${lay.name}</b><br>${lay.desc}${present.length ? '<br><br>' + present.join('<br>') : ''}`);
     const a = D.ARENA[r.affix] || D.ARENA.padrao;
     affix.textContent = `${a.icon} ${a.name}`; affix.setAttribute('data-tip', `<b>Arena:</b> ${a.desc}`);
@@ -194,6 +198,17 @@
     if (!live) { el.style.display = 'none'; return; }
     el.style.display = 'block';
     const chips = [], det = {};
+    const ms = D.MISSIONS[r.mission || 'batalha'];
+    if (r.mission && r.mission !== 'batalha') {
+      chips.push({ k: 'mis', c: r.mission === 'defesa' ? '#13897C' : r.mission === 'invasao' ? '#D9483B' : '#3B6FD6', ic: `<span class="bf-emo">${ms.icon}</span>`, kick: 'Missão', txt: ms.name, sub: ms.short });
+      const waves = [...new Set(r.enemies.map(e => e.wave || 1))].length;
+      det.mis = `<b>${ms.icon} ${ms.name}.</b> ${ms.desc}${waves > 1 ? `<br>Começam em campo <b>${r.enemies.filter(e => (e.wave || 1) === 1 && !e.fortSpawn).length}</b> de ${r.enemies.length} inimigos • <b>${waves} ondas</b>.` : ''}${r.mission === 'defesa' ? `<br><b>${r.enemies.filter(e => e.raider).length} saqueadores</b> vão direto na cidade. Recompensa: +50% de ouro.` : ''}${r.mission === 'invasao' ? `<br><b>${r.enemies.filter(e => e.fortSpawn).length}</b> inimigos saem da fortaleza enquanto ela estiver de pé. Recompensa: item extra.` : ''}`;
+    }
+    if (r.cond && r.cond !== 'nenhuma') {
+      const cd = D.CONDITIONS[r.cond];
+      chips.push({ k: 'cnd', c: '#8A5A33', ic: `<span class="bf-emo">${cd.icon}</span>`, kick: 'Campo', txt: cd.name, sub: r.capPenalty ? `limite −${r.capPenalty} em campo` : 'terreno especial', alert: !!r.capPenalty });
+      det.cnd = `<b>${cd.icon} ${cd.name}.</b> ${cd.desc}${r.capPenalty ? `<br>Nesta sala cabem <b>${G.fieldLimit(G.me())}</b> unidades suas em campo.` : ''}`;
+    }
     if (r.roomType === 'chefe') {
       const b = D.BOSSES[r.act];
       chips.push({ k: 'doc', c: '#A16207', ic: FE.Art.svg(FE.Art.BOSS_KEYS[r.act], { acc: '#A16207' }), kick: 'Chefe', txt: b.name, sub: 'mecânica especial' });
@@ -560,7 +575,7 @@
     body.querySelectorAll('[data-scaling]').forEach(b => b.addEventListener('click', () => { UI.titleScaling = b.dataset.scaling; showTitle(fromMenu); }));
     body.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { UI.titleMode = +b.dataset.mode; showTitle(fromMenu); }));
     body.querySelectorAll('[data-name]').forEach(i => i.addEventListener('input', () => { UI.titleNames[+i.dataset.name] = i.value; }));
-    $('title-logo').addEventListener('click', () => UI.anvilClick());
+    $('title-logo').addEventListener('click', (e) => UI.anvilClick(e.currentTarget));
     const f = $('modal-footer');
     const start = (opts) => {
       if (fromMenu && G.run && !UI.confirmAbandon) { UI.confirmAbandon = true; UI.toast('Clique de novo para confirmar o abandono da expedição atual.', 'error'); return; }
@@ -603,11 +618,12 @@
       const rad = n.type === 'chefe' ? 30 : 23;
       let rwTxt = t.reward;
       if (['combate', 'elite', 'chefe'].includes(n.type) && r.phase === 'MAP') { const pv = G.previewRewards(n.type, n.room); rwTxt = `🪙 ~${pv.gold}g${G.isCoop() ? ' cada' : ''} • 📘 ~${pv.pool} XP${G.isCoop() ? ' (sua parte)' : ''} a dividir • ${n.type === 'combate' ? '🎁 item a cada 3 combates' : n.type === 'elite' ? '🎁 item + 🏺 relíquia' : '🎁 item ★2 + 🏺 relíquia + 🌄 Ato'}`; }
-      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}<br><span style="color:#9A6500">Recompensa: ${rwTxt}</span>${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
+      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}<br><span style="color:#9A6500">Recompensa: ${rwTxt}</span>${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.mission ? `<br><b>${D.MISSIONS[n.mission].icon} Missão: ${D.MISSIONS[n.mission].name}</b> — ${D.MISSIONS[n.mission].short}` : ''}${n.cond && n.cond !== 'nenhuma' ? `<br><b>${D.CONDITIONS[n.cond].icon} ${D.CONDITIONS[n.cond].name}</b> — ${D.CONDITIONS[n.cond].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
       nodes += `<g class="map-node ${isAv ? 'reachable' : ''}" data-node="${n.id}" ${tipAttr(tip)} opacity="${!isAv && !isVis && !isCur ? 0.55 : 1}">
         ${isAv ? `<circle class="ring" cx="${p.x}" cy="${p.y}" r="${rad + 6}" fill="none" stroke="${t.color}"/>` : ''}
         <circle class="body" cx="${p.x}" cy="${p.y}" r="${rad}" fill="${isVis ? '#E7F5F2' : '#FFFFFF'}" stroke="${isCur ? '#1E2433' : t.color}" stroke-width="${isCur ? 4 : 2}"/>
         <text x="${p.x}" y="${p.y + 1}" text-anchor="middle" dominant-baseline="middle" font-size="${n.type === 'chefe' ? 26 : 20}">${isVis && !isCur ? '✔️' : t.icon}</text>
+        ${n.mission && n.mission !== 'batalha' && !isVis ? `<circle cx="${p.x + rad * 0.78}" cy="${p.y - rad * 0.78}" r="10" fill="#FFFFFF" stroke="#D5DCE6"/><text x="${p.x + rad * 0.78}" y="${p.y - rad * 0.78 + 1}" text-anchor="middle" dominant-baseline="middle" font-size="11">${D.MISSIONS[n.mission].icon}</text>` : ''}
         <text x="${p.x}" y="${p.y + rad + 15}" text-anchor="middle" font-size="11" font-weight="800" fill="#3D4659">${t.name}${n.layout ? ' ' + D.LAYOUTS[n.layout].icon : ''}</text></g>`;
     }));
     const floorsLbl = Array.from({ length: RPA }, (_, i) => i + 1).map(f => `<text x="${fx(f)}" y="18" text-anchor="middle" font-size="11" font-weight="800" fill="#64748b">SALA ${(r.act - 1) * RPA + f}</text>`).join('');
@@ -673,6 +689,64 @@
     b.className = 'combat-banner show ' + (p.won ? 'win' : 'lose');
     b.innerHTML = p.won ? `<span>${G.run.roomType === 'chefe' || p.final ? '👑' : '🏆'}</span>${p.final ? 'A FORJA FOI SALVA' : p.title.replace(/^\S+\s/, '').toUpperCase()}` : '<span>💥</span>DERROTA';
     setTimeout(() => { b.className = 'combat-banner'; }, 1450);
+  }
+
+  /* v5.0: aviso grande de nova onda */
+  UI.waveBanner = function (w) {
+    const b = $('combat-banner');
+    b.className = 'combat-banner show wave';
+    b.innerHTML = `<span>🌊</span>ONDA ${w.n} DE ${w.of}<small>+${w.count} inimigos pelo norte</small>`;
+    clearTimeout(UI.waveT); UI.waveT = setTimeout(() => { b.className = 'combat-banner'; }, 1600);
+  };
+
+  /* ======================= v5.0: INTERFACE COMPACTA =======================
+     Painéis laterais, cartões e o dock podem ser recolhidos. No combate o
+     tabuleiro pode ocupar a tela toda (Tela ampla). Tudo fica salvo. */
+  UI.layout = null;
+  function layoutState() {
+    if (!UI.layout) UI.layout = Object.assign({ left: true, right: true, dock: true, cards: {}, autoWide: true }, FE.settings.ui || {});
+    return UI.layout;
+  }
+  function saveLayout() { FE.settings.ui = UI.layout; FE.Storage.set(C.SAVE_KEY_SETTINGS, FE.settings); }
+  UI.applyLayout = function () {
+    const L = layoutState(), b = document.body;
+    const wide = !!(G.run && G.run.phase === 'COMBAT' && L.autoWide);
+    b.classList.toggle('left-min', !L.left || wide);
+    b.classList.toggle('right-min', !L.right || wide);
+    b.classList.toggle('dock-min', !L.dock || wide);
+    b.classList.toggle('combat-wide', wide);
+    b.classList.toggle('wide-board', !L.left || !L.right || wide);
+    document.querySelectorAll('[data-card]').forEach(c => c.classList.toggle('collapsed', !!L.cards[c.dataset.card]));
+    clearTimeout(UI.layoutT);
+    UI.layoutT = setTimeout(() => FE.Render.resize && FE.Render.resize(), 30);
+    setTimeout(() => FE.Render.resize && FE.Render.resize(), 320);
+  };
+  UI.togglePanel = function (k) { const L = layoutState(); L[k] = !L[k]; saveLayout(); UI.applyLayout(); };
+  UI.toggleHud = function () { const L = layoutState(); const open = !(L.left && L.right); L.left = open; L.right = open; saveLayout(); UI.applyLayout(); };
+  function initLayout() {
+    const L = layoutState();
+    const mk = (cls, html, tip) => { const b = document.createElement('button'); b.className = cls; b.type = 'button'; b.innerHTML = html; if (tip) b.setAttribute('data-tip', tip); return b; };
+    document.querySelectorAll('.left-col > .card, .right-col > .card').forEach((card, i) => {
+      const key = (card.closest('.left-col') ? 'l' : 'r') + i;
+      card.dataset.card = key;
+      const b = mk('card-min', '<i></i>', 'Recolher / expandir este painel');
+      b.addEventListener('click', () => { L.cards[key] = !L.cards[key]; saveLayout(); UI.applyLayout(); });
+      card.appendChild(b);
+    });
+    for (const side of ['left', 'right']) {
+      const col = document.querySelector(`.${side}-col`);
+      const hide = mk('col-hide ' + side, side === 'left' ? '‹' : '›', `Esconder painéis (tecla H mostra/esconde os dois)`);
+      hide.addEventListener('click', () => UI.togglePanel(side));
+      col.prepend(hide);
+      const show = mk('col-show ' + side, side === 'left' ? '<span>▸</span><em>Sinergias · Comando</em>' : '<span>◂</span><em>Inspetor · Relíquias · Mochila</em>', 'Mostrar painel');
+      show.addEventListener('click', () => { if (G.run && G.run.phase === 'COMBAT' && L.autoWide) { L.autoWide = false; } L[side] = true; saveLayout(); UI.applyLayout(); });
+      document.body.appendChild(show);
+    }
+    const dock = document.querySelector('.dock');
+    const db = mk('dock-min', '<i></i><span class="dm-open">Recolher</span><span class="dm-closed">Banco e recrutamento</span>', 'Recolher / mostrar banco e recrutamento');
+    db.addEventListener('click', () => UI.togglePanel('dock'));
+    dock.appendChild(db);
+    UI.applyLayout();
   }
 
   function showStory(p) {
@@ -864,11 +938,13 @@
         <div class="setting-row"><div><b>Volume</b></div><input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="vol"/></div>
         ${row('fx', 'Efeitos visuais', 'Partículas, ondas e números flutuantes no combate (desligue em aparelhos lentos).')}
         ${row('autoEvo', 'Abrir Evolução automaticamente', 'Ao entrar numa sala com PE disponíveis.')}
+        <div class="setting-row"><div><b>Tela ampla no combate</b><div class="muted" style="font-size:11.5px;">Esconde painéis e o dock durante a luta para o tabuleiro crescer.</div></div><div class="toggle ${layoutState().autoWide ? 'on' : ''}" data-layout="autoWide"></div></div>
         ${G.run ? `<div class="setting-row col"><div><b>Escala de poder</b><div class="muted" style="font-size:11.5px;">Vale a partir da próxima sala.</div></div><div class="scale-list compact">${Object.entries(D.SCALING.modes).map(([k, md]) => `<button class="scale-btn ${G.run.scaling === k ? 'active' : ''}" data-setscale="${k}" ${tipAttr(md.desc)}><b>${md.icon} ${md.name}</b></button>`).join('')}</div></div>` : ''}
         <div class="setting-row"><div><b>Abandonar expedição</b><div class="muted" style="font-size:11.5px;">Encerra a run atual sem Fragmentos.</div></div><button class="btn btn-danger" data-act="abandon" ${G.run && G.run.phase !== 'COMBAT' ? '' : 'disabled'}>Abandonar</button></div>`,
-      footer: `<span>Atalhos: Espaço iniciar/pronto • P pausar • S velocidade • A auto-posicionar • E evoluir • M mapa • C códice • 1–4 jogador • Esc fechar</span><button class="btn btn-primary" data-act="close">Fechar</button>`
+      footer: `<span>Atalhos: Espaço iniciar/pronto • P pausar • S velocidade • A auto-posicionar • E evoluir • M mapa • C códice • H painéis • F foco • T tela cheia • 1–4 jogador • Esc fechar</span><button class="btn btn-primary" data-act="close">Fechar</button>`
     });
     body.querySelectorAll('[data-toggle]').forEach(t => t.addEventListener('click', () => { s[t.dataset.toggle] = !s[t.dataset.toggle]; FE.applySettings(); UI.openSettings(); }));
+    body.querySelectorAll('[data-layout]').forEach(t => t.addEventListener('click', () => { const L = layoutState(); L[t.dataset.layout] = !L[t.dataset.layout]; saveLayout(); UI.applyLayout(); UI.openSettings(); }));
     body.querySelectorAll('[data-setscale]').forEach(b => b.addEventListener('click', () => { G.setScaling(b.dataset.setscale); UI.toast(`Escala de poder: ${D.SCALING.modes[b.dataset.setscale].name}`, 'success'); UI.openSettings(); UI.refresh(); }));
     $('vol').addEventListener('input', (e) => { s.volume = e.target.value / 100; FE.applySettings(); });
     body.querySelector('[data-act="abandon"]').addEventListener('click', (e) => {
@@ -882,7 +958,7 @@
   UI.openCodex = function (tab, onBack) {
     if (tab) UI.codexTab = tab;
     if (onBack !== undefined) UI.codexBack = onBack;
-    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['dou', '🧠 Doutrinas'], ['qua', '🏰 Recrutamento & Táticas'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
+    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['mis', '🏰 Missões'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['dou', '🧠 Doutrinas'], ['qua', '🏰 Recrutamento & Táticas'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
     let content = '';
     const t = UI.codexTab;
     if (t === 'guia') content = `<div class="codex-prose">
@@ -896,7 +972,7 @@
       <h3>Estratégia: leia o inimigo</h3><p>Antes de cada luta o painel acima do tabuleiro mostra a <b>doutrina</b> da horda (e sua fraqueza), a <b>inteligência inimiga</b> — contramedidas que eles prepararam contra o seu estilo, a partir do Ato II — e um <b>objetivo bônus</b>. Responda trocando unidades do banco, reposicionando e escolhendo uma <b>Tática</b>. Detalhes nas abas 🧠 Doutrinas e 🏰 Quartel &amp; Táticas.</p>
       <h3>Evolução</h3><p>Cada nível concede 1 PE. Gaste-o para desbloquear/aprimorar uma das 4 habilidades do arquétipo (até Nv.3) <i>ou</i> para absorver 1 stack de elemento.</p>
       <h3>Sinergias</h3><ul><li><b>Elementos</b> (2/4/6/8 stacks somados no campo): Fogo, Água, Pedra, Ar, Solar, Lunar.</li><li><b>Classes</b> (2/4/6): Bastião, Lâmina, Arcano, Devoção e Invocador.</li><li><b>Origens</b> (2/3/4): Selvagem, Oculto, Celestial e Engenho.</li><li>Cada arquétipo tem 1 Classe + 1 Origem. No Quartel, ▲ indica que aquele recruta ativa um novo nível.</li></ul>
-      <h3>Terreno</h3><p>O tabuleiro é 12×12 e muda a cada sala: montanhas, lagos, rios com pontes, ravinas, florestas (esquiva), colinas (alcance), pântanos (lentidão) e lava (dano). Posicione-se pensando nos gargalos.</p>
+      <h3>Terreno</h3><p>O tabuleiro é 16×14 e muda a cada sala: montanhas, lagos, rios com pontes, ravinas, florestas (esquiva), colinas (alcance), pântanos (lentidão) e lava (dano). Posicione-se pensando nos gargalos.</p>
       <h3>Conquistas</h3><p>${FE.Achievements.list.length} conquistas permanentes em 6 categorias (botão 🏆), algumas secretas. Cada uma rende Fragmentos Astrais e sobe o seu título de comandante.</p>
       <h3>Desafio Diário</h3><p>Todo dia uma seed nova, igual para todos, na Ascensão I. Seu melhor resultado do dia fica registrado na tela inicial.</p>
       <h3>Mapa</h3><p>Cada Ato tem um mapa ramificado. Combates e Elites dão XP; Forja, Santuário, Acampamento, Mercador e Mistério dão recursos sem lutar. Elites e Chefes garantem relíquias.</p>
@@ -907,7 +983,7 @@
       ${a.skills.map(s => `<div>${D.SKILLS[s].icon} <b>${D.SKILLS[s].name}</b> <i>(${D.SKILLS[s].type})</i>: ${D.SKILLS[s].desc(1)}</div>`).join('')}</div>`).join('')}</div>`;
     if (t === 'sin') content = `<div class="codex-grid">${Object.values(D.ELEMENTS).map(e => `<div class="codex-card"><h4 style="color:${e.color}">${e.icon} ${e.name}</h4><div><b>Pessoal:</b> ${e.personalDesc}</div><div><b>Sinergia 2/4/6/8:</b> ${e.tiersText}</div></div>`).join('')}
       ${Object.values(D.ORDERS).map(o => `<div class="codex-card"><h4 style="color:${o.color}"><span>${o.icon} ${o.name}</span><span class="kind-tag">${o.kind}</span></h4><div>Membros: ${o.members.map(m => D.ARCHETYPES[m].symbol + ' ' + D.ARCHETYPES[m].name).join(', ')}</div><div><b>${o.thresholds.join('/')}:</b> ${o.tiersText}</div></div>`).join('')}</div>`;
-    if (t === 'ter') content = `<div class="codex-prose" style="margin-bottom:12px;"><p>Cada sala de combate acontece num tabuleiro 12×12 com terreno próprio, espelhado entre os dois lados. Obstáculos forçam as unidades a contornar (elas calculam o caminho sozinhas) e pontes viram gargalos. Passe o mouse sobre uma casa do tabuleiro para ver seu efeito.</p></div>
+    if (t === 'ter') content = `<div class="codex-prose" style="margin-bottom:12px;"><p>Cada sala de combate acontece num tabuleiro 16×14 com terreno próprio, espelhado entre os dois lados. Obstáculos forçam as unidades a contornar (elas calculam o caminho sozinhas) e pontes viram gargalos. Passe o mouse sobre uma casa do tabuleiro para ver seu efeito.</p></div>
       <div class="codex-grid">${Object.entries(D.TERRAIN).filter(([k]) => k !== '.').map(([k, t]) => `<div class="codex-card"><h4><span>${t.icon} ${t.name}</span><span class="kind-tag">${t.blocked ? 'bloqueia' : 'passável'}</span></h4><div>${t.desc}</div></div>`).join('')}
       ${Object.values(D.LAYOUTS).map(l => `<div class="codex-card"><h4><span>${l.icon} ${l.name}</span><span class="kind-tag">Ato ${l.acts.map(a => ['', 'I', 'II', 'III', 'IV'][a]).join(', ')}</span></h4><div>${l.desc}</div></div>`).join('')}</div>`;
     if (t === 'rel') content = `<div class="codex-grid">${Object.values(D.RELICS).filter(r => !r.secret || (G.run && G.run.relics.includes(r.id)) || FE.Achievements.unlocked('s_pato') && r.id === 'pato_borracha' || FE.Achievements.unlocked('s_ovo') && r.id !== 'pato_borracha').map(r => `<div class="codex-card" style="border-color:${D.RARITY[r.rarity].color}55"><h4><span>${r.icon} ${r.name}</span><span style="color:${D.RARITY[r.rarity].color};font-size:11px;">${D.RARITY[r.rarity].name}</span></h4><div>${r.desc}</div></div>`).join('')}</div>`;
@@ -940,7 +1016,17 @@
       <h3>Como o poder é medido</h3>
       <p>Poder de uma unidade = √(vida efetiva × dano por segundo), contando armadura, resistência mágica, itens, relíquias, sinergias e nível. O poder do time é o <b>quadrado da soma</b> (lei de Lanchester): 6 unidades médias valem bem mais que 3 fortes. A barra <b>Seu exército × Horda</b> compara os dois e indica se a luta está Fácil, Equilibrada, Difícil ou Mortal para o momento da campanha.</p>
       <p>Nas escalas adaptativas o jogo mede a força do seu <b>elenco inteiro</b> (inclusive o banco) ao entrar na sala — então guardar unidades fortes no banco não engana o sistema, e espalhar XP entre mais unidades não é punido. A correção é suave (raiz quadrada, limitada entre ×${D.SCALING.kMin} e ×${D.SCALING.kMax}), para que boas decisões ainda sejam recompensadas.</p></div>`;
+    if (t === 'mis') content = `<div class="codex-prose" style="margin-bottom:12px;"><p>Cada sala de combate sorteia uma <b>missão</b> (o que você precisa fazer para vencer) e uma <b>condição de campo</b> (como o terreno está montado). As duas aparecem no mapa (ícone no canto do nó), no briefing antes da luta e no topo do tabuleiro. A força da horda é ajustada para cada combinação.</p></div>
+      <div class="codex-grid">${Object.values(D.MISSIONS).map(m => `<div class="codex-card"><h4><span>${m.icon} ${m.name}</span><span class="kind-tag">missão</span></h4><div>${m.desc}</div></div>`).join('')}
+      ${Object.entries(D.CONDITIONS).filter(([k]) => k !== 'nenhuma').map(([, c]) => `<div class="codex-card"><h4><span>${c.icon} ${c.name}</span><span class="kind-tag">${c.cap ? `limite −${c.cap}` : 'campo'}</span></h4><div>${c.desc}${c.acts ? ` (Ato ${c.acts.map(a => ['', 'I', 'II', 'III', 'IV'][a]).join(', ')})` : ''}</div></div>`).join('')}</div>`;
     if (t === 'notas') content = `<div class="codex-prose">
+      <h3>v5.0 — Campo de Batalha Vivo</h3>
+      <ul><li><b>Bonecos articulados</b>: pernas, braços e cabeça se movem. Eles andam, golpeiam (preparam e descem a arma), atiram, erguem os braços para conjurar, recuam ao levar dano, cambaleiam atordoados, caem para trás ao morrer e comemoram a vitória.</li>
+      <li><b>Tabuleiro 16×14</b> (era 12×12), com bonecos em escala menor e hordas maiores.</li>
+      <li><b>Missões</b>: Batalha Campal, <b>Reforços Inimigos</b> (2 ou 3 ondas entram pelo norte), <b>Defender a Cidade</b> (saqueadores vão direto nela; se cair, você perde) e <b>Invadir a Base</b> (fortaleza com torres de arqueiros que manda reforços; derrube e a horda foge).</li>
+      <li><b>Condições de campo</b>: Dois Andares (plataformas de pedra com escadas), Alçapões (armadilhas que viram buracos), Chão Desabado e Desfiladeiro Estreito (cabem menos unidades em campo).</li>
+      <li><b>Cenários</b> mais detalhados: cada Ato tem seu entorno (bosques e flores, dunas e cactos, cristais e cogumelos, obsidiana e lava), moldura de diorama, pedras e flores no campo, cidade e fortaleza em 3D.</li>
+      <li><b>Interface compacta</b>: cada painel tem − para recolher; ‹ › escondem as colunas laterais (tecla H); o dock de banco/recrutamento recolhe; e no combate a <b>Tela ampla</b> esconde tudo e aumenta o tabuleiro (dá para desligar nas Configurações).</li></ul>
       <h3>v4.1 — Tabuleiro 3D</h3>
       <ul><li><b>3D de verdade</b> (WebGL): terreno em blocos com volume, bonecos 3D de todas as classes, invocações e chefes, luz e sombras.</li>
       <li><b>Câmera livre</b>: gire com o botão direito (ou Shift) arrastando, ou com ← →; incline com ↑ ↓; zoom com a roda do mouse ou + −; ⌂ volta à câmera padrão. Os bonecos se viram para o alvo durante a luta.</li>
@@ -1068,6 +1154,7 @@
       if (r.phase === 'MAP') UI.mapDismissed = false;
       if (r.phase === 'COMBAT') requestAnimationFrame(() => { const cv = $('canvas-container'); const bx = cv.getBoundingClientRect(); if (bx.bottom > innerHeight || bx.top < 80) window.scrollBy({ top: bx.top - 96, behavior: 'smooth' }); });
       UI.lastPhase = r.phase;
+      UI.applyLayout();
     }
     if (!r) UI.lastPhase = null;
     R.invalidate();
@@ -1132,7 +1219,7 @@
     if (!d.moved) { G.selectedId = d.id; UI.inspectEnemyId = null; UI.refresh(); return; }
     const t = R.tileAt(e.clientX, e.clientY);
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (t.inside) { if (t.row >= C.PLAYER_ROW) G.placeAt(d.id, t.col, t.row); else UI.toast('Posicione apenas no seu lado do campo (linhas 6–11).', 'error'); }
+    if (t.inside) { if (t.row >= C.PLAYER_ROW) G.placeAt(d.id, t.col, t.row); else UI.toast(`Posicione apenas no seu lado do campo (linhas ${C.PLAYER_ROW + 1}–${C.ROWS}).`, 'error'); }
     else if (el && el.closest('.bench-slot')) G.toBench(d.id, +el.closest('.bench-slot').dataset.slot);
     else if (el && el.closest('#shop-panel')) G.sell(d.id);
     G.selectedId = d.id; UI.refresh();
@@ -1157,6 +1244,7 @@
 
   UI.init = function () {
     initTooltip();
+    initLayout();
     const canvas = $('battle-canvas');
     canvas.addEventListener('pointerdown', onCanvasDown);
     canvas.addEventListener('dblclick', (e) => {
@@ -1215,13 +1303,16 @@
     $('btn-pause').addEventListener('click', () => G.togglePause());
     $('players-bar').addEventListener('click', (e) => { const b = e.target.closest('[data-player]'); if (b) G.setActive(+b.dataset.player); });
     $('give-gold').addEventListener('click', () => UI.openGive());
-    document.querySelector('.brand-mark').addEventListener('click', () => UI.anvilClick());
+    document.querySelector('.brand-mark').addEventListener('click', (e) => UI.anvilClick(e.currentTarget));
     $('overlay-map-btn').addEventListener('click', () => UI.showMap());
     $('btn-speed').addEventListener('click', () => UI.cycleSpeed());
     $('btn-arrange').addEventListener('click', () => G.autoArrange());
     $('btn-evo').addEventListener('click', () => UI.openEvo());
     $('btn-map').addEventListener('click', () => UI.showMap());
     $('btn-focus').addEventListener('click', () => UI.toggleFocus());
+    $('btn-fullscreen').addEventListener('click', () => UI.toggleFullscreen());
+    const fsSync = () => { $('btn-fullscreen').classList.toggle('active', !!(document.fullscreenElement || document.webkitFullscreenElement)); setTimeout(() => FE.Render.resize(), 60); };
+    document.addEventListener('fullscreenchange', fsSync); document.addEventListener('webkitfullscreenchange', fsSync);
     $('btn-codex').addEventListener('click', () => UI.openCodex(null, null));
     $('btn-meta').addEventListener('click', () => UI.openMeta());
     $('btn-ach').addEventListener('click', () => UI.openAch(null));
@@ -1231,6 +1322,7 @@
     $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal') && UI.modalClosable) UI.closeModal(); });
 
     FE.Bus.on('changed', () => UI.refresh());
+    FE.Bus.on('wave', (w) => UI.waveBanner(w));
     FE.Bus.on('log', ({ t, type }) => UI.log(t, type));
     FE.Bus.on('clog', ({ t, type }) => UI.log(t, type));
     FE.Bus.on('toast', ({ t, type }) => UI.toast(t, type));
@@ -1242,6 +1334,19 @@
     FE.Bus.on('openEvo', () => { if (FE.settings.autoEvo && !UI.modalKind) UI.openEvo(); });
   };
 
+  UI.toggleFullscreen = function () {
+    const d = document, el = d.documentElement;
+    const isFs = d.fullscreenElement || d.webkitFullscreenElement;
+    try {
+      if (isFs) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!req) throw new Error('sem suporte');
+        const p = req.call(el);
+        if (p && p.catch) p.catch(() => UI.toast('O navegador bloqueou a tela cheia aqui. Use F11 (Windows/Linux) ou Ctrl+Cmd+F (Mac).', 'error'));
+      }
+    } catch (e) { UI.toast('Tela cheia indisponível aqui. Use F11 (Windows/Linux) ou Ctrl+Cmd+F (Mac).', 'error'); }
+  };
   UI.toggleFocus = function () {
     const on = document.body.classList.toggle('focus-mode');
     $('btn-focus').classList.toggle('active', on);
@@ -1267,16 +1372,16 @@
 
   /* ---------- Easter eggs de interface ---------- */
   UI.anvilHits = 0;
-  UI.anvilClick = function () {
+  UI.anvilClick = function (el) {
     FE.Audio.play('anvil');
-    const icon = document.querySelector('.brand-icon');
-    icon.classList.remove('hit'); void icon.offsetWidth; icon.classList.add('hit');
+    const icon = el || document.querySelector('.brand-mark') || document.getElementById('title-logo');
+    if (icon) { icon.classList.remove('hit'); void icon.offsetWidth; icon.classList.add('hit'); }
     clearTimeout(UI.anvilT); UI.anvilT = setTimeout(() => { UI.anvilHits = 0; }, 1500);
     if (++UI.anvilHits >= 7) {
       UI.anvilHits = 0;
       for (let i = 0; i < 24; i++) {
         const sp = document.createElement('div'); sp.className = 'spark';
-        const rc = icon.getBoundingClientRect();
+        const rc = icon ? icon.getBoundingClientRect() : { left: innerWidth / 2, top: 60, width: 0, height: 0 };
         sp.style.left = (rc.left + rc.width / 2) + 'px'; sp.style.top = (rc.top + rc.height / 2) + 'px';
         sp.style.setProperty('--dx', ((Math.random() - 0.5) * 220) + 'px'); sp.style.setProperty('--dy', (-Math.random() * 160 - 20) + 'px');
         document.body.appendChild(sp); setTimeout(() => sp.remove(), 900);
