@@ -1,4 +1,4 @@
-# Forja Elemental 4.1
+# Forja Elemental 5.0
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
