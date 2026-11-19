@@ -9,7 +9,7 @@
   const FE = root.FE;
 
   const CONFIG = {
-    COLS: 8, ROWS: 8, BENCH: 8, MAX_TEAM: 16,
+    COLS: 12, ROWS: 12, PLAYER_ROW: 6, BENCH: 8, MAX_TEAM: 16,
     ROOMS_PER_ACT: 5, ACTS: 3, TOTAL_ROOMS: 15,
     START_GOLD: 150, START_CITADEL: 100, START_TEAM_LIMIT: 4,
     SELL_RATIO: 0.75, INTEREST_RATE: 0.10, INTEREST_CAP: 25,
@@ -24,38 +24,53 @@
     LEGACY_META_KEY: 'forja_elemental_roguelike_meta_v1'
   };
 
-  /* ---------------- 9 ARQUÉTIPOS (7 originais + Lanceiro e Druida) -------- */
+  /* ---------------- 14 ARQUÉTIPOS (cada um com 1 Classe + 1 Origem) ------- */
   const ARCHETYPES = {
-    vanguarda: { id: 'vanguarda', name: 'Vanguarda', role: 'Tanque', order: 'bastiao', cost: 25, color: '#3b82f6', symbol: '🛡', signatureSkill: 'vg_impacto',
+    vanguarda: { id: 'vanguarda', name: 'Vanguarda', role: 'Tanque', orders: ['bastiao', 'engenho'], cost: 25, color: '#3b82f6', symbol: '🛡', signatureSkill: 'vg_impacto',
       skills: ['vg_impacto', 'vg_bastiao', 'vg_couraca', 'vg_provocacao'], pref: 'front',
       stats: { maxHp: 820, ad: 42, ap: 25, armor: 40, attackSpeed: 0.72, range: 1.45, critChance: 0.05, moveSpeed: 2.1, maxMana: 95 } },
-    arcanista: { id: 'arcanista', name: 'Arcanista', role: 'Mago', order: 'arcano', cost: 30, color: '#a855f7', symbol: '🔮', signatureSkill: 'ar_orbe',
-      skills: ['ar_orbe', 'ar_meteoro', 'ar_fluxo', 'ar_eco'], pref: 'back',
-      stats: { maxHp: 440, ad: 32, ap: 78, armor: 14, attackSpeed: 0.80, range: 3.6, critChance: 0.10, moveSpeed: 2.0, maxMana: 85 } },
-    cacador: { id: 'cacador', name: 'Caçador', role: 'Atirador', order: 'lamina', cost: 30, color: '#10b981', symbol: '🏹', signatureSkill: 'ca_saraivada',
-      skills: ['ca_saraivada', 'ca_tiro_letal', 'ca_olho_aguia', 'ca_vento_leve'], pref: 'back',
-      stats: { maxHp: 470, ad: 64, ap: 15, armor: 16, attackSpeed: 1.15, range: 4.3, critChance: 0.20, moveSpeed: 2.2, maxMana: 90 } },
-    sombra: { id: 'sombra', name: 'Sombra', role: 'Assassino', order: 'lamina', cost: 35, color: '#f43f5e', symbol: '🗡', signatureSkill: 'so_golpe',
-      skills: ['so_golpe', 'so_danca', 'so_veneno', 'so_evasao'], pref: 'flank',
-      stats: { maxHp: 500, ad: 75, ap: 25, armor: 18, attackSpeed: 1.05, range: 1.45, critChance: 0.28, moveSpeed: 3.2, maxMana: 80 } },
-    clerigo: { id: 'clerigo', name: 'Clérigo', role: 'Suporte', order: 'devocao', cost: 30, color: '#38bdf8', symbol: '✨', signatureSkill: 'cl_luz',
-      skills: ['cl_luz', 'cl_prece', 'cl_graca', 'cl_aura_mana'], pref: 'back',
-      stats: { maxHp: 510, ad: 30, ap: 70, armor: 20, attackSpeed: 0.85, range: 3.1, critChance: 0.08, moveSpeed: 2.1, maxMana: 80 } },
-    artifice: { id: 'artifice', name: 'Artífice', role: 'Engenheiro', order: 'arcano', cost: 35, color: '#f59e0b', symbol: '⚙️', signatureSkill: 'at_torreta',
-      skills: ['at_torreta', 'at_sobrecarga', 'at_engrenagem', 'at_campo_forca'], pref: 'back',
-      stats: { maxHp: 520, ad: 48, ap: 62, armor: 22, attackSpeed: 0.85, range: 3.3, critChance: 0.12, moveSpeed: 2.0, maxMana: 85 } },
-    berserker: { id: 'berserker', name: 'Berserker', role: 'Lutador', order: 'bastiao', cost: 35, color: '#ea580c', symbol: '🪓', signatureSkill: 'be_furia',
+    paladino: { id: 'paladino', name: 'Paladino', role: 'Guardião', orders: ['bastiao', 'celestial'], cost: 35, color: '#fde047', symbol: '⚜️', signatureSkill: 'pa_martelo',
+      skills: ['pa_martelo', 'pa_consagrar', 'pa_aura', 'pa_fe'], pref: 'front',
+      stats: { maxHp: 760, ad: 48, ap: 50, armor: 36, attackSpeed: 0.75, range: 1.45, critChance: 0.06, moveSpeed: 2.1, maxMana: 90 } },
+    berserker: { id: 'berserker', name: 'Berserker', role: 'Lutador', orders: ['bastiao', 'selvagem'], cost: 35, color: '#ea580c', symbol: '🪓', signatureSkill: 'be_furia',
       skills: ['be_furia', 'be_corte_giratorio', 'be_sede_sangue', 'be_pele_ferro'], pref: 'front',
       stats: { maxHp: 640, ad: 70, ap: 15, armor: 24, attackSpeed: 0.92, range: 1.45, critChance: 0.16, moveSpeed: 2.4, maxMana: 85 } },
-    lanceiro: { id: 'lanceiro', name: 'Lanceiro', role: 'Duelista', order: 'lamina', cost: 30, color: '#14b8a6', symbol: '🔱', signatureSkill: 'ln_estocada',
+    cacador: { id: 'cacador', name: 'Caçador', role: 'Atirador', orders: ['lamina', 'selvagem'], cost: 30, color: '#10b981', symbol: '🏹', signatureSkill: 'ca_saraivada',
+      skills: ['ca_saraivada', 'ca_tiro_letal', 'ca_olho_aguia', 'ca_vento_leve'], pref: 'back',
+      stats: { maxHp: 470, ad: 64, ap: 15, armor: 16, attackSpeed: 1.15, range: 4.3, critChance: 0.20, moveSpeed: 2.2, maxMana: 90 } },
+    sombra: { id: 'sombra', name: 'Sombra', role: 'Assassino', orders: ['lamina', 'oculto'], cost: 35, color: '#f43f5e', symbol: '🗡', signatureSkill: 'so_golpe',
+      skills: ['so_golpe', 'so_danca', 'so_veneno', 'so_evasao'], pref: 'flank',
+      stats: { maxHp: 500, ad: 75, ap: 25, armor: 18, attackSpeed: 1.05, range: 1.45, critChance: 0.28, moveSpeed: 3.2, maxMana: 80 } },
+    lanceiro: { id: 'lanceiro', name: 'Lanceiro', role: 'Duelista', orders: ['lamina', 'engenho'], cost: 30, color: '#14b8a6', symbol: '🔱', signatureSkill: 'ln_estocada',
       skills: ['ln_estocada', 'ln_varredura', 'ln_postura', 'ln_primeiro'], pref: 'mid',
       stats: { maxHp: 600, ad: 58, ap: 20, armor: 26, attackSpeed: 0.95, range: 2.2, critChance: 0.12, moveSpeed: 2.3, maxMana: 85 } },
-    druida: { id: 'druida', name: 'Druida', role: 'Invocador', order: 'devocao', cost: 35, color: '#84cc16', symbol: '🌿', signatureSkill: 'dr_raizes',
+    monge: { id: 'monge', name: 'Monge', role: 'Lutador Ágil', orders: ['lamina', 'selvagem'], cost: 30, color: '#f0abfc', symbol: '👊', signatureSkill: 'mo_palma',
+      skills: ['mo_palma', 'mo_rajada', 'mo_fluxo', 'mo_serenidade'], pref: 'flank',
+      stats: { maxHp: 580, ad: 60, ap: 30, armor: 22, attackSpeed: 1.2, range: 1.45, critChance: 0.15, moveSpeed: 2.8, maxMana: 70 } },
+    arcanista: { id: 'arcanista', name: 'Arcanista', role: 'Mago', orders: ['arcano', 'oculto'], cost: 30, color: '#a855f7', symbol: '🔮', signatureSkill: 'ar_orbe',
+      skills: ['ar_orbe', 'ar_meteoro', 'ar_fluxo', 'ar_eco'], pref: 'back',
+      stats: { maxHp: 440, ad: 32, ap: 78, armor: 14, attackSpeed: 0.80, range: 3.6, critChance: 0.10, moveSpeed: 2.0, maxMana: 85 } },
+    alquimista: { id: 'alquimista', name: 'Alquimista', role: 'Mago de Área', orders: ['arcano', 'engenho'], cost: 30, color: '#06b6d4', symbol: '⚗️', signatureSkill: 'al_frasco',
+      skills: ['al_frasco', 'al_nevoa', 'al_catalise', 'al_transmutar'], pref: 'back',
+      stats: { maxHp: 480, ad: 36, ap: 70, armor: 18, attackSpeed: 0.85, range: 3.2, critChance: 0.08, moveSpeed: 2.0, maxMana: 85 } },
+    clerigo: { id: 'clerigo', name: 'Clérigo', role: 'Curandeiro', orders: ['devocao', 'celestial'], cost: 30, color: '#38bdf8', symbol: '✨', signatureSkill: 'cl_luz',
+      skills: ['cl_luz', 'cl_prece', 'cl_graca', 'cl_aura_mana'], pref: 'back',
+      stats: { maxHp: 510, ad: 30, ap: 70, armor: 20, attackSpeed: 0.85, range: 3.1, critChance: 0.08, moveSpeed: 2.1, maxMana: 80 } },
+    bardo: { id: 'bardo', name: 'Bardo', role: 'Inspirador', orders: ['devocao', 'celestial'], cost: 30, color: '#f472b6', symbol: '🎻', signatureSkill: 'bd_hino',
+      skills: ['bd_hino', 'bd_balada', 'bd_inspirar', 'bd_ritmo'], pref: 'back',
+      stats: { maxHp: 500, ad: 34, ap: 60, armor: 18, attackSpeed: 0.90, range: 3.0, critChance: 0.08, moveSpeed: 2.1, maxMana: 80 } },
+    artifice: { id: 'artifice', name: 'Artífice', role: 'Engenheiro', orders: ['invocador', 'engenho'], cost: 35, color: '#f59e0b', symbol: '⚙️', signatureSkill: 'at_torreta',
+      skills: ['at_torreta', 'at_sobrecarga', 'at_engrenagem', 'at_campo_forca'], pref: 'back',
+      stats: { maxHp: 520, ad: 48, ap: 62, armor: 22, attackSpeed: 0.85, range: 3.3, critChance: 0.12, moveSpeed: 2.0, maxMana: 85 } },
+    druida: { id: 'druida', name: 'Druida', role: 'Xamã', orders: ['invocador', 'selvagem'], cost: 35, color: '#84cc16', symbol: '🌿', signatureSkill: 'dr_raizes',
       skills: ['dr_raizes', 'dr_lobo', 'dr_seiva', 'dr_casca'], pref: 'back',
-      stats: { maxHp: 560, ad: 34, ap: 66, armor: 22, attackSpeed: 0.82, range: 3.0, critChance: 0.08, moveSpeed: 2.0, maxMana: 90 } }
+      stats: { maxHp: 560, ad: 34, ap: 66, armor: 22, attackSpeed: 0.82, range: 3.0, critChance: 0.08, moveSpeed: 2.0, maxMana: 90 } },
+    necromante: { id: 'necromante', name: 'Necromante', role: 'Feiticeiro', orders: ['invocador', 'oculto'], cost: 35, color: '#6366f1', symbol: '☠️', signatureSkill: 'ne_erguer',
+      skills: ['ne_erguer', 'ne_drenar', 'ne_colheita', 'ne_pacto'], pref: 'back',
+      stats: { maxHp: 470, ad: 30, ap: 72, armor: 16, attackSpeed: 0.82, range: 3.2, critChance: 0.08, moveSpeed: 2.0, maxMana: 90 } }
   };
 
-  /* ---------------- 36 HABILIDADES (4 por arquétipo, Nv.1–3) ---------------- */
+  /* ---------------- 56 HABILIDADES (4 por arquétipo, Nv.1–3) ---------------- */
   const SKILLS = {
     vg_impacto: { name: 'Impacto Sísmico', type: 'ativa', icon: '💥', desc: l => `Golpeia o solo: (${65 + l * 35} + 85% AD) em área, atordoa ${(1.1 + l * 0.35).toFixed(1)}s e gera ${110 + l * 65} de Escudo.` },
     vg_bastiao: { name: 'Bastião Inabalável', type: 'ativa', icon: '🛡️', desc: l => `Concede (${140 + l * 80} + 110% AP) de Escudo para si e aliados próximos.` },
@@ -100,7 +115,32 @@
     dr_raizes: { name: 'Raízes Constritoras', type: 'ativa', icon: '🌱', desc: l => `Enraíza ${1 + l} inimigos por ${(1 + l * 0.3).toFixed(1)}s: (${60 + l * 30} + 80% AP) mágico.` },
     dr_lobo: { name: 'Chamado Selvagem', type: 'ativa', icon: '🐺', desc: l => `Invoca Lobo Espiritual (${300 + l * 150} HP, ${35 + l * 20} AD) corpo a corpo.` },
     dr_seiva: { name: 'Seiva Vital', type: 'passiva', icon: '🍃', desc: l => `A cada 1s cura aliados em raio 2.5 em (${6 * l} + ${5 * l}% AP).` },
-    dr_casca: { name: 'Casca de Carvalho', type: 'passiva', icon: '🌳', desc: l => `+${l * 120} Vida e -${l * 7}% de dano sofrido.` }
+    dr_casca: { name: 'Casca de Carvalho', type: 'passiva', icon: '🌳', desc: l => `+${l * 120} Vida e -${l * 7}% de dano sofrido.` },
+
+    pa_martelo: { name: 'Martelo da Justiça', type: 'ativa', icon: '🔨', desc: l => `Golpe sagrado: (${70 + l * 40} + 90% AD + 50% AP) mágico, atordoa ${(1 + l * 0.3).toFixed(1)}s e cura o aliado mais ferido em 50% do dano.` },
+    pa_consagrar: { name: 'Solo Consagrado', type: 'ativa', icon: '✝️', desc: l => `Raio 2.0: (${55 + l * 30} + 70% AP) aos inimigos e cura aliados em (${40 + l * 25} + 50% AP).` },
+    pa_aura: { name: 'Aura de Proteção', type: 'passiva', icon: '🔆', desc: l => `Aliados em raio 2.5 (inclusive ele) sofrem -${l * 5}% de dano.` },
+    pa_fe: { name: 'Fé Inabalável', type: 'passiva', icon: '🙏', desc: l => `+${l * 12}% Vida e +${l * 10} Armadura.` },
+
+    mo_palma: { name: 'Palma do Dragão', type: 'ativa', icon: '🐉', desc: l => `(${60 + l * 35} + 100% AD), empurra o alvo 1.5 casa e atordoa ${(0.6 + l * 0.2).toFixed(1)}s.` },
+    mo_rajada: { name: 'Cem Golpes', type: 'ativa', icon: '💢', desc: l => `${3 + l} golpes rápidos de (${20 + l * 10} + 40% AD) no alvo.` },
+    mo_fluxo: { name: 'Fluxo do Chi', type: 'passiva', icon: '☯️', desc: l => `+${l * 5} Mana por ataque e +${l * 8}% Vel. Ataque.` },
+    mo_serenidade: { name: 'Serenidade', type: 'passiva', icon: '🍃', desc: l => `+${l * 10}% Esquiva.` },
+
+    al_frasco: { name: 'Frasco Corrosivo', type: 'ativa', icon: '🧪', desc: l => `Explode em raio 1.6: (${70 + l * 35} + 90% AP) mágico e -${l * 10} Armadura permanente nos atingidos.` },
+    al_nevoa: { name: 'Névoa Tóxica', type: 'ativa', icon: '☁️', desc: l => `Envenena inimigos em raio 2.0 por 4s: (${15 + l * 10} + 20% AP)/s.` },
+    al_catalise: { name: 'Catálise', type: 'passiva', icon: '🔬', desc: l => `+${l * 15}% AP e -${l * 8}% de Mana Máxima.` },
+    al_transmutar: { name: 'Transmutação', type: 'passiva', icon: '🪙', desc: l => `Se estiver em campo numa vitória: +${l * 8}g.` },
+
+    bd_hino: { name: 'Hino de Guerra', type: 'ativa', icon: '🎺', desc: l => `Todos os aliados ganham +${20 + l * 10}% Vel. Ataque por 4s.` },
+    bd_balada: { name: 'Balada Restauradora', type: 'ativa', icon: '🎶', desc: l => `Cura aliados em raio 3 em (${60 + l * 30} + 60% AP) e restaura 15 de Mana.` },
+    bd_inspirar: { name: 'Inspiração', type: 'passiva', icon: '🎵', desc: l => `Aliados em raio 2.5 causam +${l * 6}% de dano.` },
+    bd_ritmo: { name: 'Ritmo', type: 'passiva', icon: '🥁', desc: l => `+${l * 12} Mana inicial e +${l * 3} Mana/s.` },
+
+    ne_erguer: { name: 'Erguer Mortos', type: 'ativa', icon: '💀', desc: l => `Invoca ${l >= 3 ? 2 : 1} Esqueleto(s) (${200 + l * 100} HP, ${30 + l * 15} AD).` },
+    ne_drenar: { name: 'Drenar Vida', type: 'ativa', icon: '🩸', desc: l => `Feixe: (${90 + l * 45} + 100% AP) mágico; cura-se em 50% do dano.` },
+    ne_colheita: { name: 'Colheita de Almas', type: 'passiva', icon: '👻', desc: l => `Cada morte no combate (de qualquer lado) concede +${l * 4}% AP.` },
+    ne_pacto: { name: 'Pacto Sombrio', type: 'passiva', icon: '📕', desc: l => `+${l * 10}% Roubo de Vida e invocações com +${l * 20}% Vida.` }
   };
   for (const [id, sk] of Object.entries(SKILLS)) sk.id = id;
 
@@ -126,21 +166,38 @@
       lifesteal: [0.12, 0.22, 0.35, 0.50], critDmg: [0.35, 0.70, 1.10, 1.60] }
   };
 
-  /* ---------------- 4 ORDENS (sinergia de classe 2/4/6) — NOVO ------------- */
+  /* ---------------- 9 ORDENS: 5 Classes (função) + 4 Origens --------------
+     Cada arquétipo pertence a 1 Classe e 1 Origem. Os limiares são por ordem. */
   const ORDERS = {
-    bastiao: { id: 'bastiao', name: 'Bastião', icon: '🏰', color: '#60a5fa', members: ['vanguarda', 'berserker'],
+    bastiao: { id: 'bastiao', kind: 'Classe', name: 'Bastião', icon: '🏰', color: '#60a5fa', thresholds: [2, 4, 6],
       tiersText: 'Membros: +15%/30%/50% Vida e +10/25/45 Armadura.',
       tiers: [{ hpPct: 0.15, armor: 10 }, { hpPct: 0.30, armor: 25 }, { hpPct: 0.50, armor: 45 }] },
-    arcano: { id: 'arcano', name: 'Arcano', icon: '📜', color: '#c084fc', members: ['arcanista', 'artifice'],
-      tiersText: 'Membros: +15%/30%/50% AP e +2/4/7 Mana/s.',
-      tiers: [{ apPct: 0.15, manaRegen: 2 }, { apPct: 0.30, manaRegen: 4 }, { apPct: 0.50, manaRegen: 7 }] },
-    lamina: { id: 'lamina', name: 'Lâmina', icon: '⚔️', color: '#f87171', members: ['cacador', 'sombra', 'lanceiro'],
+    lamina: { id: 'lamina', kind: 'Classe', name: 'Lâmina', icon: '⚔️', color: '#f87171', thresholds: [2, 4, 6],
       tiersText: 'Membros: +10%/20%/35% Crítico e +20%/40%/70% Dano Crítico.',
       tiers: [{ crit: 0.10, critDmg: 0.20 }, { crit: 0.20, critDmg: 0.40 }, { crit: 0.35, critDmg: 0.70 }] },
-    devocao: { id: 'devocao', name: 'Devoção', icon: '🕯️', color: '#a3e635', members: ['clerigo', 'druida'],
+    arcano: { id: 'arcano', kind: 'Classe', name: 'Arcano', icon: '📜', color: '#c084fc', thresholds: [2, 4, 6],
+      tiersText: 'Membros: +15%/30%/50% AP e +2/4/7 Mana/s.',
+      tiers: [{ apPct: 0.15, manaRegen: 2 }, { apPct: 0.30, manaRegen: 4 }, { apPct: 0.50, manaRegen: 7 }] },
+    devocao: { id: 'devocao', kind: 'Classe', name: 'Devoção', icon: '🕯️', color: '#a3e635', thresholds: [2, 4, 6],
       tiersText: 'TODO o time: +15%/30%/50% Cura e Escudo. Membros: +15/30/50 Mana inicial.',
-      tiers: [{ healAll: 0.15, startMana: 15 }, { healAll: 0.30, startMana: 30 }, { healAll: 0.50, startMana: 50 }] }
+      tiers: [{ healAll: 0.15, startMana: 15 }, { healAll: 0.30, startMana: 30 }, { healAll: 0.50, startMana: 50 }] },
+    invocador: { id: 'invocador', kind: 'Classe', name: 'Invocador', icon: '🪄', color: '#fbbf24', thresholds: [2, 4, 6],
+      tiersText: 'Invocações dos membros com +25%/55%/100% Vida e Dano. Membros: +10/20/35 Mana inicial.',
+      tiers: [{ summonMult: 0.25, startMana: 10 }, { summonMult: 0.55, startMana: 20 }, { summonMult: 1.0, startMana: 35 }] },
+    selvagem: { id: 'selvagem', kind: 'Origem', name: 'Selvagem', icon: '🐾', color: '#4ade80', thresholds: [2, 3, 4],
+      tiersText: 'Membros: regeneram 1%/1.8%/3% da Vida por segundo e +10%/15%/25% Vel. Ataque.',
+      tiers: [{ regenPct: 0.010, asPct: 0.10 }, { regenPct: 0.018, asPct: 0.15 }, { regenPct: 0.030, asPct: 0.25 }] },
+    oculto: { id: 'oculto', kind: 'Origem', name: 'Oculto', icon: '🌘', color: '#818cf8', thresholds: [2, 3, 4],
+      tiersText: 'Membros: +10%/18%/28% Roubo de Vida e +15%/25%/40% de dano em alvos abaixo de 45% de Vida.',
+      tiers: [{ lifesteal: 0.10, execute: 0.15 }, { lifesteal: 0.18, execute: 0.25 }, { lifesteal: 0.28, execute: 0.40 }] },
+    celestial: { id: 'celestial', kind: 'Origem', name: 'Celestial', icon: '🌞', color: '#fde68a', thresholds: [2, 3, 4],
+      tiersText: 'TODO o time: Escudo inicial de 6%/12%/20% da Vida. Membros: +10%/18%/28% Dano Verdadeiro.',
+      tiers: [{ teamShield: 0.06, trueDmg: 0.10 }, { teamShield: 0.12, trueDmg: 0.18 }, { teamShield: 0.20, trueDmg: 0.28 }] },
+    engenho: { id: 'engenho', kind: 'Origem', name: 'Engenho', icon: '🔩', color: '#94a3b8', thresholds: [2, 3, 4],
+      tiersText: 'Membros: +15/30/50 Armadura e +10%/20%/35% Penetração de Armadura.',
+      tiers: [{ armor: 15, armorPen: 0.10 }, { armor: 30, armorPen: 0.20 }, { armor: 50, armorPen: 0.35 }] }
   };
+  for (const o of Object.values(ORDERS)) o.members = Object.values(ARCHETYPES).filter(a => a.orders.includes(o.id)).map(a => a.id);
 
   /* ---------------- 24 RELÍQUIAS com raridade ----------------------------- */
   const RELICS = {
@@ -153,8 +210,8 @@
     martelo_ferreiro: { name: 'Martelo do Ferreiro', icon: '🔨', rarity: 'comum', desc: 'Unidades com 2+ itens ganham +30% de Dano e Escudo de 25% da Vida.' },
     ampulheta_temporal: { name: 'Ampulheta Temporal', icon: '⏳', rarity: 'comum', desc: 'Todos os aliados começam o combate com +40 de Mana.' },
     orbe_sobrecarga: { name: 'Orbe de Sobrecarga', icon: '🔮', rarity: 'rara', desc: 'Cada conjuração concede +12% AP acumulável durante o combate.' },
-    egide_tita: { name: 'Égide do Titã', icon: '🏛️', rarity: 'comum', desc: 'Unidades nas linhas da frente (4 e 5) ganham +35% Vida e +25 Armadura.' },
-    lente_atirador: { name: 'Lente do Atirador', icon: '🔭', rarity: 'comum', desc: 'Unidades na retaguarda (6 e 7) ganham +25% Crítico e +1.0 de Alcance.' },
+    egide_tita: { name: 'Égide do Titã', icon: '🏛️', rarity: 'comum', desc: 'Unidades nas duas linhas da frente (6 e 7) ganham +35% Vida e +25 Armadura.' },
+    lente_atirador: { name: 'Lente do Atirador', icon: '🔭', rarity: 'comum', desc: 'Unidades nas duas linhas de trás (10 e 11) ganham +25% Crítico e +1.0 de Alcance.' },
     calice_sangue: { name: 'Cálice Carmesim', icon: '🍷', rarity: 'rara', desc: 'Ao abater, cura 20% da Vida e ganha +25% Vel. Ataque por 4s.' },
     tomo_evolucao: { name: 'Tomo da Evolução', icon: '📖', rarity: 'comum', desc: '+25% de XP em todas as salas. Ao obter: +1 PE para a unidade de maior nível.' },
     nucleo_instavel: { name: 'Núcleo Instável', icon: '💣', rarity: 'rara', desc: 'No início do combate, inimigos sofrem 15% da Vida Máxima.' },
@@ -235,13 +292,13 @@
   const ACTS = {
     1: { name: 'Floresta Cinzenta', short: 'ATO I', palette: { enemyA: '#131d1b', enemyB: '#0f1715', playerA: '#132229', playerB: '#0e1a20', divider: 'rgba(16,185,129,.45)' },
       enemyColor: '#65a30d',
-      faction: { vanguarda: ['Tronco Animado', '🪵'], berserker: ['Lobo Cinzento', '🐺'], cacador: ['Arqueiro Goblin', '🏹'], arcanista: ['Xamã Fúngico', '🍄'], sombra: ['Aranha Sombria', '🕷️'], clerigo: ['Espírito do Bosque', '🌫️'], artifice: ['Goblin Engenhoqueiro', '🔩'], lanceiro: ['Batedor Silvano', '🔱'], druida: ['Ent Jovem', '🌳'] } },
+      faction: { vanguarda: ['Tronco Animado', '🪵'], berserker: ['Lobo Cinzento', '🐺'], cacador: ['Arqueiro Goblin', '🏹'], arcanista: ['Xamã Fúngico', '🍄'], sombra: ['Aranha Sombria', '🕷️'], clerigo: ['Espírito do Bosque', '🌫️'], artifice: ['Goblin Engenhoqueiro', '🔩'], lanceiro: ['Batedor Silvano', '🔱'], druida: ['Ent Jovem', '🌳'], paladino: ['Cavaleiro Silvestre', '🐗'], monge: ['Macaco Lutador', '🐒'], alquimista: ['Bruxa do Brejo', '🧪'], bardo: ['Fada Cantora', '🧚'], necromante: ['Coruja Agourenta', '🦉'] } },
     2: { name: 'Ruínas Solares', short: 'ATO II', palette: { enemyA: '#241b12', enemyB: '#1c150e', playerA: '#1c2233', playerB: '#151a28', divider: 'rgba(245,158,11,.5)' },
       enemyColor: '#d97706',
-      faction: { vanguarda: ['Golem de Areia', '🗿'], berserker: ['Escorpião Rubro', '🦂'], cacador: ['Sentinela Solar', '☀️'], arcanista: ['Sacerdote Dourado', '📿'], sombra: ['Múmia Furtiva', '🧟'], clerigo: ['Oráculo das Dunas', '🔆'], artifice: ['Autômato de Bronze', '🤖'], lanceiro: ['Guarda do Templo', '🔱'], druida: ['Cacto Ancestral', '🌵'] } },
+      faction: { vanguarda: ['Golem de Areia', '🗿'], berserker: ['Escorpião Rubro', '🦂'], cacador: ['Sentinela Solar', '☀️'], arcanista: ['Sacerdote Dourado', '📿'], sombra: ['Múmia Furtiva', '🧟'], clerigo: ['Oráculo das Dunas', '🔆'], artifice: ['Autômato de Bronze', '🤖'], lanceiro: ['Guarda do Templo', '🔱'], druida: ['Cacto Ancestral', '🌵'], paladino: ['Templário do Sol', '🛕'], monge: ['Monge do Deserto', '🧘'], alquimista: ['Alquimista de Âmbar', '🏺'], bardo: ['Encantador de Serpentes', '🐍'], necromante: ['Embalsamador', '⚱️'] } },
     3: { name: 'Abismo do Eclipse', short: 'ATO III', palette: { enemyA: '#231126', enemyB: '#190c1c', playerA: '#151930', playerB: '#0f1326', divider: 'rgba(192,132,252,.5)' },
       enemyColor: '#9333ea',
-      faction: { vanguarda: ['Cavaleiro do Vazio', '♜'], berserker: ['Devorador Abissal', '👹'], cacador: ['Atirador Espectral', '🏹'], arcanista: ['Lich Menor', '💀'], sombra: ['Espectro', '👻'], clerigo: ['Acólito do Eclipse', '🕯️'], artifice: ['Forja-Viva', '⚙️'], lanceiro: ['Lanceiro Caído', '🔱'], druida: ['Raiz Corrompida', '🥀'] } }
+      faction: { vanguarda: ['Cavaleiro do Vazio', '♜'], berserker: ['Devorador Abissal', '👹'], cacador: ['Atirador Espectral', '🏹'], arcanista: ['Lich Menor', '💀'], sombra: ['Espectro', '👻'], clerigo: ['Acólito do Eclipse', '🕯️'], artifice: ['Forja-Viva', '⚙️'], lanceiro: ['Lanceiro Caído', '🔱'], druida: ['Raiz Corrompida', '🥀'], paladino: ['Cavaleiro Profano', '🗡️'], monge: ['Asceta do Vazio', '🌀'], alquimista: ['Destilador de Almas', '🧫'], bardo: ['Sirene Abissal', '🧜'], necromante: ['Arquilich', '👿'] } }
   };
 
   const BOSSES = {
@@ -292,5 +349,33 @@
     { level: 5, name: 'Ascensão V', desc: 'Acima, e inimigos comuns (a partir da Sala 3) ganham 1 stack elemental extra.' }
   ];
 
-  FE.Data = { CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS };
+  /* ---------------- TERRENO (12x12) ------------------------------------------
+     Cada casa do tabuleiro tem um tipo. Bloqueados impedem passagem e
+     posicionamento; os demais alteram o combate de quem está sobre eles. */
+  const TERRAIN = {
+    '.': { name: 'Campo', icon: '', blocked: false, desc: 'Sem efeito.' },
+    M: { name: 'Montanha', icon: '⛰️', blocked: true, desc: 'Intransponível. Força as unidades a contornar.' },
+    W: { name: 'Água', icon: '🌊', blocked: true, desc: 'Lago ou rio: intransponível. Atravesse pelas pontes.' },
+    R: { name: 'Ravina', icon: '🕳️', blocked: true, desc: 'Abismo intransponível. Atravesse pelas pontes.' },
+    P: { name: 'Pilar em Ruínas', icon: '🏛️', blocked: true, desc: 'Obstáculo de pedra intransponível.' },
+    B: { name: 'Ponte', icon: '🌉', blocked: false, desc: 'Única passagem sobre água e ravinas — um gargalo tático.' },
+    F: { name: 'Floresta', icon: '🌲', blocked: false, desc: '+15% de Esquiva contra ataques físicos para quem está nela.' },
+    H: { name: 'Colina', icon: '⛰', blocked: false, desc: 'Unidades à distância ganham +1 de Alcance e +10% de dano.' },
+    S: { name: 'Pântano', icon: '🪷', blocked: false, desc: '-45% de Velocidade de Movimento.' },
+    L: { name: 'Lava', icon: '🔥', blocked: false, desc: 'Causa 3% da Vida Máxima por segundo a quem estiver sobre ela.' }
+  };
+
+  const LAYOUTS = {
+    planicie: { name: 'Planície Aberta', icon: '🌾', acts: [1, 2], desc: 'Terreno aberto com poucos bosques e colinas.' },
+    floresta: { name: 'Floresta Densa', icon: '🌲', acts: [1], desc: 'Muitas árvores dão esquiva; rochas pelo caminho.' },
+    rio: { name: 'Rio das Pontes', icon: '🌉', acts: [1, 2], desc: 'Um rio corta o campo ao meio: só se cruza pelas pontes.' },
+    lago: { name: 'Lago Central', icon: '🏞️', acts: [1, 2, 3], desc: 'Um lago no centro divide o combate em dois flancos.' },
+    montanha: { name: 'Passo da Montanha', icon: '🏔️', acts: [1, 2, 3], desc: 'Uma cordilheira com poucas passagens estreitas e colinas.' },
+    pantano: { name: 'Pântano Sombrio', icon: '🪷', acts: [1, 3], desc: 'Lama que retarda o avanço e pequenas poças.' },
+    ravina: { name: 'Ravina Partida', icon: '🕳️', acts: [2, 3], desc: 'Um abismo vertical separa os flancos; pontes nas pontas.' },
+    ruinas: { name: 'Ruínas Antigas', icon: '🏛️', acts: [2, 3], desc: 'Pilares de pedra criam corredores e esconderijos.' },
+    magma: { name: 'Campos de Magma', icon: '🌋', acts: [3], desc: 'Rios de lava ferem quem os atravessa; rochas de obsidiana.' }
+  };
+
+  FE.Data = { CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);

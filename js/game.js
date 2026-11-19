@@ -24,13 +24,16 @@
       v: 2, astralShards: 0,
       upgrades: Object.fromEntries(Object.keys(D.META_UPGRADES).map(k => [k, 0])),
       maxAscension: 0, migratedV1: false,
-      records: { runs: 0, wins: 0, bestRoom: 0, kills: 0, bestWinAscension: -1 }
+      records: { runs: 0, wins: 0, bestRoom: 0, kills: 0, bestWinAscension: -1 },
+      ach: {}, lifetime: { recruited: [], terrainsWon: [], bossesKilled: 0 }
     };
   }
   G.loadMeta = function () {
     const m = Object.assign(defaultMeta(), FE.Storage.get(C.SAVE_KEY_META) || {});
     m.upgrades = Object.assign(defaultMeta().upgrades, m.upgrades || {});
     m.records = Object.assign(defaultMeta().records, m.records || {});
+    m.ach = m.ach || {};
+    m.lifetime = Object.assign(defaultMeta().lifetime, m.lifetime || {});
     if (!m.migratedV1) {
       const old = FE.Storage.get(C.LEGACY_META_KEY);
       if (old) {
@@ -69,14 +72,15 @@
     const citadelMax = C.START_CITADEL + up.citadelMax * 10 - (asc >= 4 ? 20 : 0);
     G.combat = null;
     G.run = {
-      v: 2, seed: seedStr, rngState: seedNum, ascension: asc,
+      v: 3, seed: seedStr, rngState: seedNum, ascension: asc,
       act: 1, room: 0, nodeId: null, visited: [], map: null,
       roomType: 'combate', affix: 'padrao', enemies: [], attempt: 0,
       citadelHp: citadelMax, citadelMax, gold: C.START_GOLD + up.goldStart * 15 - (asc >= 2 ? 30 : 0),
       teamLimit: C.START_TEAM_LIMIT, nextUnitId: 1, recruited: 0,
       board: [], bench: Array(C.BENCH).fill(null), relics: [], bag: [],
       stats: { kills: 0, elites: 0, bosses: 0, combats: 0, wins: 0, losses: 0, goldEarned: 0, bestHit: 0 },
-      phase: 'MAP', pending: [], afterPending: 'MAP', ended: null
+      phase: 'MAP', pending: [], afterPending: 'MAP', ended: null,
+      terrain: '.'.repeat(C.COLS * C.ROWS), layout: 'planicie', roomTypesSeen: [], noLoss: true
     };
     G.run.map = withRng(r => E.generateActMap(r, 1, asc));
     G.meta.records.runs++; G.saveMeta();
@@ -88,12 +92,13 @@
   G.save = function () {
     if (!G.run || G.run.phase === 'END') return;
     if (G.run.phase === 'COMBAT') return; // salvo antes do combate
+    G.emitAch({ type: 'state' });
     FE.Storage.set(C.SAVE_KEY_RUN, G.run);
   };
-  G.hasSave = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return !!(s && s.v === 2 && s.phase !== 'END'); };
+  G.hasSave = () => { const s = FE.Storage.get(C.SAVE_KEY_RUN); return !!(s && s.v === 3 && s.phase !== 'END'); };
   G.loadRun = function () {
     const s = FE.Storage.get(C.SAVE_KEY_RUN);
-    if (!s || s.v !== 2) return false;
+    if (!s || s.v !== 3) return false;
     if (s.phase === 'COMBAT') s.phase = 'PREP';
     G.run = s; G.combat = null;
     log(`📂 Expedição retomada — Ato ${s.act}, Sala ${s.room}/15.`, 'gold');
@@ -120,7 +125,7 @@
   };
   G.orderCounts = function () {
     const counts = Object.fromEntries(Object.keys(D.ORDERS).map(k => [k, 0]));
-    for (const u of G.run.board) counts[G.arch(u).order]++;
+    for (const u of G.run.board) for (const o of G.arch(u).orders) counts[o]++;
     return counts;
   };
   G.statsCtx = () => ({ isEnemy: false, board: G.run.board, relics: new Set(G.run.relics), affix: G.run.affix, gold: G.run.gold, synergy: G.synergyCounts(), orders: G.orderCounts() });
@@ -138,9 +143,25 @@
   };
 
   /* ---------------- ROSTER ---------------- */
+  const P0 = C.PLAYER_ROW;
+  G.blocked = (col, row) => E.tileBlocked(G.run.terrain, col, row);
   function freeBoardTile() {
-    for (const r of [5, 6, 4, 7]) for (let c = 0; c < C.COLS; c++) if (!G.run.board.some(u => u.col === c && u.row === r)) return { col: c, row: r };
+    const cols = [5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0, 11];
+    for (const r of [P0 + 1, P0 + 2, P0, P0 + 3, P0 + 4, P0 + 5]) for (const c of cols) if (!G.blocked(c, r) && !G.run.board.some(u => u.col === c && u.row === r)) return { col: c, row: r };
     return null;
+  }
+  /* Ao trocar de terreno, unidades em casas bloqueadas são reposicionadas */
+  function relocateBlocked() {
+    const taken = new Set(G.run.board.filter(u => !G.blocked(u.col, u.row)).map(u => u.col + ',' + u.row));
+    for (const u of G.run.board) {
+      if (!G.blocked(u.col, u.row)) continue;
+      let best = null, bd = Infinity;
+      for (let r = P0; r < C.ROWS; r++) for (let c = 0; c < C.COLS; c++) {
+        if (G.blocked(c, r) || taken.has(c + ',' + r)) continue;
+        const d = Math.hypot(c - u.col, r - u.row); if (d < bd) { bd = d; best = { c, r }; }
+      }
+      if (best) { u.col = best.c; u.row = best.r; taken.add(best.c + ',' + best.r); }
+    }
   }
   const freeBench = () => G.run.bench.findIndex(s => s === null);
 
@@ -160,6 +181,8 @@
       col: tile ? tile.col : -1, row: tile ? tile.row : -1, elements: {}, skills: { [arch.signatureSkill]: 1 }, items: [] };
     if (tile) r.board.push(u); else r.bench[slot] = u;
     log(`Recrutou ${u.name} ${tile ? 'no campo' : 'no banco'} (${cost}g).`, 'gold');
+    G.meta.lifetime = G.meta.lifetime || {}; const rec = G.meta.lifetime.recruited = G.meta.lifetime.recruited || [];
+    if (!rec.includes(archId)) { rec.push(archId); G.saveMeta(); }
     G.selectedId = id; sfx('buy'); G.save(); changed();
   };
 
@@ -196,7 +219,8 @@
   G.placeAt = function (id, col, row) {
     if (!G.canEdit()) return false;
     const r = G.run;
-    if (row < 4 || row >= C.ROWS || col < 0 || col >= C.COLS) return false;
+    if (row < P0 || row >= C.ROWS || col < 0 || col >= C.COLS) return false;
+    if (G.blocked(col, row)) { toast(`${D.TERRAIN[E.terrainAt(r.terrain, col, row)].name}: não é possível posicionar aqui.`, 'error'); return false; }
     const u = G.find(id); if (!u) return false;
     const occ = r.board.find(x => x.col === col && x.row === row && x.id !== id);
     if (G.onBoard(id)) {
@@ -246,17 +270,17 @@
   /* Posicionamento automático por papel: tanques na frente, alcance atrás. */
   G.autoArrange = function () {
     if (!G.canEdit() || !G.run.board.length) return;
-    const rowsByPref = { front: [4, 5], flank: [4, 5], mid: [5, 4, 6], back: [7, 6, 5] };
+    const rowsByPref = { front: [P0, P0 + 1], flank: [P0, P0 + 1], mid: [P0 + 1, P0 + 2, P0], back: [P0 + 4, P0 + 3, P0 + 5, P0 + 2] };
     const order = ['front', 'flank', 'mid', 'back'];
-    const cols = [3, 4, 2, 5, 1, 6, 0, 7];
+    const cols = [5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0, 11];
     const taken = new Set();
     const units = [...G.run.board].sort((a, b) => order.indexOf(G.arch(a).pref) - order.indexOf(G.arch(b).pref));
     for (const u of units) {
       const pref = G.arch(u).pref;
-      const colOrder = pref === 'flank' ? [0, 7, 1, 6, 2, 5, 3, 4] : cols;
+      const colOrder = pref === 'flank' ? [1, 10, 2, 9, 0, 11, 3, 8, 4, 7, 5, 6] : cols;
       let placed = false;
-      for (const row of [...rowsByPref[pref], 4, 5, 6, 7]) {
-        for (const col of colOrder) { const k = col + ',' + row; if (!taken.has(k)) { taken.add(k); u.col = col; u.row = row; placed = true; break; } }
+      for (const row of [...rowsByPref[pref], P0, P0 + 1, P0 + 2, P0 + 3, P0 + 4, P0 + 5]) {
+        for (const col of colOrder) { const k = col + ',' + row; if (!taken.has(k) && !G.blocked(col, row)) { taken.add(k); u.col = col; u.row = row; placed = true; break; } }
         if (placed) break;
       }
     }
@@ -330,9 +354,14 @@
     r.nodeId = id; r.visited.push(id); r.room = node.room; r.act = node.act;
     const nt = D.NODE_TYPES[node.type];
     log(`🗺️ Sala ${r.room}/15: ${nt.icon} ${nt.name}.`);
+    if (!r.roomTypesSeen.includes(node.type)) r.roomTypesSeen.push(node.type);
     if (['combate', 'elite', 'chefe'].includes(node.type)) {
       r.roomType = node.type; r.affix = node.affix; r.attempt = 0;
-      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension));
+      r.layout = node.layout || 'planicie';
+      r.terrain = withRng(rng => E.generateTerrain(rng, r.layout, r.act));
+      relocateBlocked();
+      r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain));
+      log(`🗺️ Terreno: ${D.LAYOUTS[r.layout].icon} ${D.LAYOUTS[r.layout].name} — ${D.LAYOUTS[r.layout].desc}`);
       r.phase = 'PREP';
       if (node.type === 'chefe') { sfx('bossGong'); log(`👑 ${D.BOSSES[r.act].name}: ${D.BOSSES[r.act].mechanic}`, 'danger'); }
       G.save(); changed();
@@ -356,7 +385,7 @@
     const ctx = G.statsCtx();
     G.combat = E.createCombat({
       seed: (FE.util.hashStr(r.seed) ^ (r.room * 7919) ^ (r.attempt * 104729)) >>> 0,
-      relics: new Set(r.relics), affix: r.affix, fx: G.settings ? G.settings.fx !== false : true,
+      relics: new Set(r.relics), affix: r.affix, fx: G.settings ? G.settings.fx !== false : true, terrain: r.terrain,
       players: r.board.map(u => ({ unit: { ...u, name: u.name }, stats: G.statsOf(u, ctx) })),
       enemies: r.enemies.map(e => ({ unit: e, stats: G.enemyStats(e) }))
     });
@@ -376,10 +405,14 @@
     E.updateFx(c, dt);
   };
 
+  G.emitAch = (ev) => { if (FE.Achievements) FE.Achievements.check(ev); };
   function finishCombat(c) {
     const r = G.run;
     const res = c.result;
     const report = E.combatReport(c);
+    G.emitAch({ type: 'combat', won: res.won, time: res.time, report, roomType: r.roomType, room: r.room, act: r.act, layout: r.layout,
+      boardSize: r.board.length, losses: report.filter(x => !x.survived).length, maxSummons: c.maxPlayerSummons });
+    if (!res.won) r.noLoss = false;
     const pool = G.xpPool();
     const n = Math.max(1, r.board.length);
     const levelUps = [];
@@ -401,6 +434,8 @@
       const interest = Math.min(C.INTEREST_CAP, Math.floor(r.gold * C.INTEREST_RATE));
       r.gold += gold + interest; r.stats.goldEarned += gold + interest;
       lines.push(`🪙 +${gold}g de recompensa e +${interest}g de juros`);
+      const trans = r.board.reduce((sum, u) => sum + (u.skills.al_transmutar || 0) * 8, 0);
+      if (trans) { r.gold += trans; lines.push(`⚗️ Transmutação: +${trans}g`); }
       const per = Math.floor(pool / n);
       for (const u of r.board) { const g = G.grantXp(u, per); if (g) levelUps.push(`${u.name} → Nv.${u.level}`); }
       lines.push(`📘 +${per} XP para cada uma das ${n} unidade(s) em campo (+${killXp} XP por abate)`);
@@ -470,6 +505,7 @@
     }
     G.saveMeta();
     r.phase = 'END';
+    G.emitAch({ type: 'end', victory });
     r.ended = { victory, shards, unlocked, report };
     FE.Storage.del(C.SAVE_KEY_RUN);
     log(victory ? '👑 EXPEDIÇÃO CONCLUÍDA!' : '💀 A Cidadela caiu.', victory ? 'win' : 'danger');

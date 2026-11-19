@@ -4,7 +4,7 @@ const path = require('path');
 globalThis.window = globalThis;
 const store = {};
 globalThis.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } };
-for (const f of ['core', 'data', 'engine', 'game']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['core', 'data', 'engine', 'game', 'achievements']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const FE = globalThis.FE, G = FE.Game, D = FE.Data;
 
 const RUNS = +process.argv[2] || 30, ASC = +process.argv[3] || 0;
@@ -14,7 +14,7 @@ const results = []; let errors = 0;
 function aiPrep() {
   const r = G.run;
   // sobe o limite quando sobra ouro e compra unidades variadas
-  const order = ['vanguarda', 'arcanista', 'clerigo', 'cacador', 'berserker', 'druida', 'lanceiro', 'artifice', 'sombra'];
+  const order = ['vanguarda', 'arcanista', 'clerigo', 'cacador', 'paladino', 'necromante', 'bardo', 'monge', 'alquimista', 'berserker', 'druida', 'lanceiro', 'artifice', 'sombra'];
   let guard = 0;
   while (r.gold >= 40 && guard++ < 10) {
     if (r.board.length >= r.teamLimit) { if (r.teamLimit < 7) G.setTeamLimit(r.teamLimit + 1); else break; }
@@ -61,3 +61,4 @@ const wins = results.filter(r => r.win).length;
 const avgRoom = results.reduce((s, r) => s + r.room, 0) / Math.max(1, results.length);
 console.log(JSON.stringify({ runs: RUNS, asc: ASC, errors, wins, winRate: (wins / RUNS).toFixed(2), avgRoom: avgRoom.toFixed(1),
   rooms: results.map(r => r.room).join(','), maxLvl: Math.max(...results.map(r => r.lvl)) }));
+console.log('conquistas:', Object.keys(G.meta.ach).join(', '));

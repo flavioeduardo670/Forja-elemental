@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forja Elemental 2.0 — Auto-Battler Tático Roguelike</title>
+  <title>Forja Elemental 2.1 — Auto-Battler Tático Roguelike</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
@@ -14,7 +14,7 @@
     <div class="brand">
       <div class="brand-icon">⚔</div>
       <div class="brand-text">
-        <h1>FORJA ELEMENTAL<small>2.0</small></h1>
+        <h1>FORJA ELEMENTAL<small>2.1</small></h1>
         <span id="hud-act">Ato I • Floresta Cinzenta</span>
       </div>
     </div>
@@ -38,6 +38,7 @@
       </div>
       <div class="relics-bar" id="hud-relics"></div>
       <button class="icon-btn" id="btn-map" data-tip="Ver o mapa do Ato (tecla M)">🗺️ Mapa <kbd>M</kbd></button>
+      <button class="icon-btn" id="btn-ach" data-tip="Conquistas">🏆 <span id="hud-ach">0</span></button>
       <button class="icon-btn" id="btn-codex" data-tip="Códice: regras, unidades, relíquias, itens e notas da versão (tecla C)">📖 Códice</button>
       <button class="icon-btn violet" id="btn-meta">🌌 <span id="hud-shards">0</span></button>
       <button class="icon-btn" id="btn-settings" data-tip="Configurações">⚙️</button>
@@ -49,10 +50,7 @@
     <aside class="panel left-col">
       <div class="panel-header">
         <span class="panel-title">✦ Sinergias</span>
-        <div class="tabs" id="syn-tabs">
-          <button class="tab active" data-tab="el">Elementos</button>
-          <button class="tab" data-tab="ord">Ordens</button>
-        </div>
+        <span class="panel-subtitle" id="syn-count">0 ativas</span>
       </div>
       <div class="synergy-list" id="synergy-list"></div>
       <div class="panel-header" style="margin-top:2px;">
@@ -67,6 +65,7 @@
         <div class="board-topbar">
           <span class="chip prep" id="phase-chip">Preparação</span>
           <span class="chip" id="room-chip">—</span>
+          <span class="chip terrain" id="terrain-chip">🌾 Planície</span>
           <span class="chip affix" id="affix-chip">🌿 Campo Neutro</span>
         </div>
         <div class="canvas-container" id="canvas-container">
@@ -93,7 +92,7 @@
       </div>
       <div class="panel shop-panel" id="shop-panel">
         <div class="panel-header">
-          <span class="panel-title">🏛️ Recrutamento Livre (9 Arquétipos • sem RNG)</span>
+          <span class="panel-title">🏛️ Recrutamento Livre (14 Arquétipos • sem RNG)</span>
           <span class="panel-subtitle">Clique para recrutar • arraste uma unidade aqui para vender</span>
         </div>
         <div class="shop-grid" id="shop-grid"></div>
@@ -136,6 +135,7 @@
   <script src="js/data.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/achievements.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/render.js"></script>
   <script src="js/ui.js"></script>
