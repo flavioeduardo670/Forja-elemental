@@ -1,4 +1,4 @@
-# Forja Elemental 4.0
+# Forja Elemental 4.1
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,6 +18,12 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 4.1 — Tabuleiro 3D
+- **`js/gl3d.js`**: mini-motor WebGL próprio (sem dependências) — matrizes, construtor de malhas low-poly (caixa, cilindro, cone, esfera, toro, cápsula) com cor e brilho por vértice, terreno 3D por tipo de casa e bonecos 3D por classe/invocação/chefe.
+- **`js/render.js`**: renderizador 3D com câmera orbital (yaw/pitch/zoom suavizados), seleção de casa por raio, sombras, bonecos virando para o alvo e camada 2D (`#battle-canvas`) para barras, números e efeitos.
+- **`js/render-iso.js`**: renderizador isométrico 2D da 4.0, usado automaticamente quando não há WebGL.
+- Controles: botão direito/do meio ou Shift + arrastar, setas, roda do mouse, botões no canto do tabuleiro.
 
 ## Novidades da 4.0 — Diorama
 - **Visual novo**: `js/render.js` reescrito com projeção isométrica (`R.project`, `R.tileAt` com correção de altura), blocos com altura por terreno e paleta por Ato; `js/toys.js` define os bonecos de brinquedo (camadas Path2D/SVG) usados no canvas e na interface (`FE.Toy.draw`, `FE.Toy.svg`, `FE.Art.medal` agora devolve um retrato de boneco).

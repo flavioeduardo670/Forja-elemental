@@ -900,7 +900,7 @@
       <h3>Conquistas</h3><p>${FE.Achievements.list.length} conquistas permanentes em 6 categorias (botão 🏆), algumas secretas. Cada uma rende Fragmentos Astrais e sobe o seu título de comandante.</p>
       <h3>Desafio Diário</h3><p>Todo dia uma seed nova, igual para todos, na Ascensão I. Seu melhor resultado do dia fica registrado na tela inicial.</p>
       <h3>Mapa</h3><p>Cada Ato tem um mapa ramificado. Combates e Elites dão XP; Forja, Santuário, Acampamento, Mercador e Mistério dão recursos sem lutar. Elites e Chefes garantem relíquias.</p>
-      <h3>Controles</h3><ul><li>Arraste unidades entre banco e campo, ou dentro do campo para trocar posições. Arraste até o Quartel para vender.</li><li>Clique em inimigos durante a preparação para estudá-los.</li><li>Itens: selecione uma unidade e clique no item da mochila. Dois itens iguais do mesmo tier podem ser fundidos (★→★★→★★★).</li><li>Clique no ✏️ do Inspetor para dar nome às suas unidades.</li><li>Atalhos: <code>Espaço</code> iniciar/pronto • <code>P</code> pausar • <code>S</code> velocidade • <code>A</code> auto-posicionar • <code>F</code> modo foco • <code>E</code> evoluir • <code>M</code> mapa • <code>C</code> códice • <code>1–4</code> jogador • <code>Esc</code> fechar.</li></ul></div>`;
+      <h3>Controles</h3><ul><li>Arraste unidades entre banco e campo, ou dentro do campo para trocar posições. Arraste até o Quartel para vender.</li><li>Clique em inimigos durante a preparação para estudá-los.</li><li>Itens: selecione uma unidade e clique no item da mochila. Dois itens iguais do mesmo tier podem ser fundidos (★→★★→★★★).</li><li>Clique no ✏️ do Inspetor para dar nome às suas unidades.</li><li>Atalhos: <code>Espaço</code> iniciar/pronto • <code>P</code> pausar • <code>S</code> velocidade • <code>A</code> auto-posicionar • <code>F</code> modo foco • <code>← →</code> girar câmera • <code>↑ ↓</code> inclinar • <code>+ −</code> zoom • <code>E</code> evoluir • <code>M</code> mapa • <code>C</code> códice • <code>1–4</code> jogador • <code>Esc</code> fechar.</li></ul></div>`;
     if (t === 'arq') content = `<div class="codex-grid">${Object.values(D.ARCHETYPES).map(a => `<div class="codex-card"><h4><span class="h-medal">${FE.Art.medal(a.id, { color: a.color, cls: 'sm' })} ${a.name}</span><span class="gold-text">${a.cost}g</span></h4>
       <div>${a.role} • ${ordersLine(a)}</div>
       <div>❤️ ${a.stats.maxHp} • ⚔️ ${a.stats.ad} • 🔮 ${a.stats.ap} • 🛡️ ${a.stats.armor} • ⚡ ${a.stats.attackSpeed} • 🎯 ${a.stats.range}</div>
@@ -941,6 +941,10 @@
       <p>Poder de uma unidade = √(vida efetiva × dano por segundo), contando armadura, resistência mágica, itens, relíquias, sinergias e nível. O poder do time é o <b>quadrado da soma</b> (lei de Lanchester): 6 unidades médias valem bem mais que 3 fortes. A barra <b>Seu exército × Horda</b> compara os dois e indica se a luta está Fácil, Equilibrada, Difícil ou Mortal para o momento da campanha.</p>
       <p>Nas escalas adaptativas o jogo mede a força do seu <b>elenco inteiro</b> (inclusive o banco) ao entrar na sala — então guardar unidades fortes no banco não engana o sistema, e espalhar XP entre mais unidades não é punido. A correção é suave (raiz quadrada, limitada entre ×${D.SCALING.kMin} e ×${D.SCALING.kMax}), para que boas decisões ainda sejam recompensadas.</p></div>`;
     if (t === 'notas') content = `<div class="codex-prose">
+      <h3>v4.1 — Tabuleiro 3D</h3>
+      <ul><li><b>3D de verdade</b> (WebGL): terreno em blocos com volume, bonecos 3D de todas as classes, invocações e chefes, luz e sombras.</li>
+      <li><b>Câmera livre</b>: gire com o botão direito (ou Shift) arrastando, ou com ← →; incline com ↑ ↓; zoom com a roda do mouse ou + −; ⌂ volta à câmera padrão. Os bonecos se viram para o alvo durante a luta.</li>
+      <li>Sem WebGL, o jogo usa automaticamente o tabuleiro isométrico da 4.0.</li></ul>
       <h3>v4.0 — Diorama</h3>
       <ul><li><b>Novo visual</b>: tabuleiro isométrico em blocos com altura (montanhas sobem, água e lava afundam), bonecos de brinquedo para todas as classes, inimigos e chefes, e interface clara em cartões.</li>
       <li><b>Sem sorteio no recrutamento</b>: todas as classes sempre disponíveis, preço fixo; sem rolagem, trava ou traços aleatórios.</li>
@@ -1135,7 +1139,7 @@
   }
 
   function onCanvasDown(e) {
-    if (!G.run) return;
+    if (!G.run || e.button !== 0 || e.shiftKey) return;
     const t = R.tileAt(e.clientX, e.clientY);
     const r = G.run;
     if (r.phase === 'COMBAT' && G.combat) {

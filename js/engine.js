@@ -1081,7 +1081,7 @@
       if (u.stun > 0) { u.stun -= dt; continue; }
 
       const opps = u.team === 'player' ? enemies.filter(e => !e.dead) : allPlayers.filter(p => !p.dead);
-      const tgt = chooseTarget(u, opps);
+      const tgt = chooseTarget(u, opps); u.target = tgt;
       if (!tgt) continue;
       const dist = Math.hypot(tgt.x - u.x, tgt.y - u.y);
 
