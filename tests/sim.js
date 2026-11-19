@@ -9,7 +9,7 @@ for (const f of ['core', 'data', 'engine', 'game', 'achievements']) require(path
 const FE = globalThis.FE, G = FE.Game, D = FE.Data;
 if (globalThis.__sweep) Object.assign(FE.Engine.COOP_SCALE, { countPer: globalThis.__sweep.cnt, statPer: globalThis.__sweep.st, bossPer: globalThis.__sweep.boss });
 
-const RUNS = +process.argv[2] || 30, ASC = +process.argv[3] || 0, PLAYERS = +process.argv[4] || 1;
+const RUNS = +process.argv[2] || 30, ASC = +process.argv[3] || 0, PLAYERS = +process.argv[4] || 1, SCALING = process.argv[5] || 'dinamica';
 G.loadMeta(); G.meta.maxAscension = 5; G.meta.seenTutorial = true;
 const results = []; let errors = 0;
 const ORDER = ['vanguarda', 'arcanista', 'clerigo', 'cacador', 'paladino', 'necromante', 'bardo', 'monge', 'alquimista', 'berserker', 'druida', 'lanceiro', 'artifice', 'sombra'];
@@ -37,7 +37,7 @@ const aiPrep = () => { for (let i = 0; i < G.coop(); i++) aiPrepPlayer(i); G.run
 
 for (let i = 0; i < RUNS; i++) {
   try {
-    G.newRun({ seed: 'SIM' + i + 'P' + PLAYERS, ascension: ASC, players: PLAYERS });
+    G.newRun({ seed: 'SIM' + i + 'P' + PLAYERS, ascension: ASC, players: PLAYERS, scaling: SCALING });
     let steps = 0;
     while (G.run.phase !== 'END' && steps++ < 600) {
       const r = G.run;
@@ -63,4 +63,4 @@ for (let i = 0; i < RUNS; i++) {
 const wins = results.filter(r => r.win).length;
 const avgRoom = results.reduce((s, r) => s + r.room, 0) / Math.max(1, results.length);
 const hist = {}; for (const r of results) { const a = r.win ? 'V' : 'A' + Math.ceil(r.room / D.CONFIG.ROOMS_PER_ACT); hist[a] = (hist[a] || 0) + 1; }
-console.log(JSON.stringify({ runs: RUNS, asc: ASC, players: PLAYERS, errors, winRate: (wins / RUNS).toFixed(2), avgRoom: avgRoom.toFixed(1), fim: hist, maxLvl: Math.max(...results.map(r => r.lvl)), avgLosses: (results.reduce((s, r) => s + r.losses, 0) / results.length).toFixed(1), avgUnits: (results.reduce((s, r) => s + r.units, 0) / results.length).toFixed(1) }));
+console.log(JSON.stringify({ mode: SCALING, runs: RUNS, asc: ASC, players: PLAYERS, errors, winRate: (wins / RUNS).toFixed(2), avgRoom: avgRoom.toFixed(1), fim: hist, maxLvl: Math.max(...results.map(r => r.lvl)), avgLosses: (results.reduce((s, r) => s + r.losses, 0) / results.length).toFixed(1), avgUnits: (results.reduce((s, r) => s + r.units, 0) / results.length).toFixed(1) }));

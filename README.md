@@ -1,4 +1,4 @@
-# Forja Elemental 2.2
+# Forja Elemental 2.3
 
 Auto-battler tático roguelike em HTML/JS puro (sem build, sem dependências).
 
@@ -18,6 +18,13 @@ Abra `index.html` no navegador (ou sirva a pasta com qualquer servidor estático
 1. Registre em `data.js` (ex.: nova relíquia com `rarity` e `desc`).
 2. Se tiver efeito novo, implemente em `engine.js` (`computeStats`, `SKILL_FX` ou `BOSS_SCRIPTS`).
 3. Rode `tests/sim.js` para conferir que nada quebrou e a taxa de vitória continua na faixa desejada.
+
+## Novidades da 2.3
+- **Escalas de poder** (`D.SCALING`, `G.targetRatio`, `applyScaling` em game.js): Clássica, Nivelada, Proporcional e Dinâmica (padrão, com Medidor de Ameaça −3..+10: +7% de poder inimigo e +6% de recompensa por ponto).
+- **Métrica de poder** (`Engine.unitPower/teamPower`): √(vida efetiva × DPS) por unidade, time = (Σ)²/100 (Lanchester).
+- **Recompensas explícitas**: `G.previewRewards()` alimenta a faixa "Se vencer / Se perder" e os tooltips do mapa; `finishCombat` gera `rewards` estruturado para o relatório em cartões.
+- **Visual**: tremor de tela, cortes, rastros, fantasmas, flash de dano, halo/selo de nível, terreno animado, vinheta, faixa de vitória.
+- Simulador: `node tests/sim.js <runs> <asc> <jogadores> <escala>`.
 
 ## Novidades da 2.2
 - Co-op local 2–4 jogadores (12 unidades divididas; ouro, banco e mochila por jogador; sistema de Pronto; escolhas em rodízio; doações).

@@ -468,7 +468,7 @@
       units: [], time: 0, rng: FE.RNG(opts.seed || 1), relics: opts.relics || new Set(), affix: opts.affix,
       phoenixUsed: false, over: false, result: null, overtimeAnnounced: false, fxOn: opts.fx !== false,
       terrain: opts.terrain || '.'.repeat(C.COLS * C.ROWS), maxPlayerSummons: 0,
-      fx: { projectiles: [], particles: [], texts: [], shockwaves: [], beams: [] }
+      fx: { projectiles: [], particles: [], texts: [], shockwaves: [], beams: [], slashes: [], ghosts: [], shake: 0 }
     };
     for (const p of opts.players) c.units.push(makeCombatant(p.unit, 'player', p.stats));
     for (const e of opts.enemies) c.units.push(makeCombatant(e.unit, 'enemy', e.stats));
@@ -543,7 +543,11 @@
       c.fx.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, color, size: 2.2 + Math.random() * 2.6, life: 0.4 + Math.random() * 0.35, maxLife: 0.75 });
     }
   }
-  function shock(c, x, y, r, color) { if (c.fxOn) c.fx.shockwaves.push({ x, y, radius: 0.15, maxRadius: r, color, life: 0.38, maxLife: 0.38 }); }
+  function shock(c, x, y, r, color) {
+    if (!c.fxOn) return;
+    c.fx.shockwaves.push({ x, y, radius: 0.15, maxRadius: r, color, life: 0.38, maxLife: 0.38 });
+    if (r >= 2.5) c.fx.shake = Math.max(c.fx.shake, Math.min(10, r * 1.6));
+  }
   function beam(c, x1, y1, x2, y2, color) { if (c.fxOn) c.fx.beams.push({ x1, y1, x2, y2, color, life: 0.22, maxLife: 0.22 }); }
   const sfx = (name, arg) => FE.Bus.emit('sfx', { name, arg });
 
@@ -554,6 +558,7 @@
     if (tgt.shield > 0) { const ab = Math.min(tgt.shield, rem); tgt.shield -= ab; rem -= ab; }
     tgt.hp = Math.max(0, tgt.hp - rem);
     tgt.dmgTaken += amount;
+    if (vis) tgt.flash = 0.12;
     const credit = src ? (src.owner || src) : null;
     if (credit && credit.team !== tgt.team) credit.dmgDealt += amount;
     if (vis) text(c, tgt.x + (Math.random() - 0.5) * 0.25, tgt.y - 0.3, vis.t, vis.color, vis.scale || 1);
@@ -639,6 +644,8 @@
       return;
     }
     v.dead = true; v.hp = 0;
+    if (c.fxOn) c.fx.ghosts.push({ x: v.x, y: v.y, symbol: v.symbol, color: v.color, life: 0.9, maxLife: 0.9 });
+    if (v.isBoss && c.fxOn) c.fx.shake = 14;
     for (const n of c.units) if (!n.dead && n.skills.ne_colheita) n.stats.ap = Math.round(n.stats.ap * (1 + 0.04 * n.skills.ne_colheita));
     particles(c, v.x, v.y, v.color, 16); shock(c, v.x, v.y, 1.0, v.color);
     sfx('death');
@@ -1031,6 +1038,7 @@
             if (u.stats.range <= 2.3) {
               const dx = tgt.x - u.x, dy = tgt.y - u.y, len = Math.max(0.01, Math.hypot(dx, dy));
               u.lungeX = dx / len * 0.26; u.lungeY = dy / len * 0.26;
+              if (c.fxOn && c.fx.slashes.length < 60) c.fx.slashes.push({ x: tgt.x, y: tgt.y, a: Math.atan2(dy, dx), color: crit ? '#facc15' : u.color, life: 0.18, maxLife: 0.18, big: crit });
               sfx('hit', crit); dealDamage(c, u, tgt, dmg, 'physical', crit);
             } else {
               c.fx.projectiles.push({ x: u.x, y: u.y, target: tgt, attacker: u, speed: 8, dmg, crit, color: u.color });
@@ -1071,7 +1079,7 @@
       if (!p.target || p.target.dead) { P.splice(i, 1); continue; }
       const dx = p.target.x - p.x, dy = p.target.y - p.y, d = Math.hypot(dx, dy);
       if (d <= 0.25) { sfx('hit', p.crit); dealDamage(c, p.attacker, p.target, p.dmg, 'physical', p.crit); particles(c, p.x, p.y, p.color, 5); P.splice(i, 1); }
-      else { p.x += dx / d * p.speed * dt; p.y += dy / d * p.speed * dt; }
+      else { p.px = p.x; p.py = p.y; p.x += dx / d * p.speed * dt; p.y += dy / d * p.speed * dt; }
     }
   }
 
@@ -1081,6 +1089,10 @@
     for (let i = f.shockwaves.length - 1; i >= 0; i--) { const s = f.shockwaves[i]; s.life -= dt; s.radius = 0.15 + (1 - Math.max(0, s.life / s.maxLife)) * s.maxRadius; if (s.life <= 0) f.shockwaves.splice(i, 1); }
     for (let i = f.beams.length - 1; i >= 0; i--) { f.beams[i].life -= dt; if (f.beams[i].life <= 0) f.beams.splice(i, 1); }
     for (let i = f.texts.length - 1; i >= 0; i--) { const t = f.texts[i]; t.y += t.vy * dt; t.life -= dt; if (t.life <= 0) f.texts.splice(i, 1); }
+    for (let i = f.slashes.length - 1; i >= 0; i--) { f.slashes[i].life -= dt; if (f.slashes[i].life <= 0) f.slashes.splice(i, 1); }
+    for (let i = f.ghosts.length - 1; i >= 0; i--) { const g = f.ghosts[i]; g.y -= dt * 0.6; g.life -= dt; if (g.life <= 0) f.ghosts.splice(i, 1); }
+    f.shake = Math.max(0, f.shake - dt * 30);
+    for (const u of c.units) if (u.flash > 0) u.flash -= dt;
   }
 
   /* Relatório pós-combate por unidade do jogador (invocações creditadas ao dono) */
@@ -1092,7 +1104,28 @@
     }));
   }
 
+  /* ======================================================================
+     4. ESCALA DE PODER
+     Poder de uma unidade = √(vida efetiva × dano por segundo). Poder de um
+     time = (Σ poder)² — lei quadrática de Lanchester: dobrar o número de
+     unidades iguais quadruplica a força em combate.
+     ====================================================================== */
+  function unitPower(s) {
+    const ehp = (s.maxHp + (s.initialShield || 0)) * (1 + Math.max(0, s.armor) / 100)
+      / Math.max(0.3, 1 - (s.dodge || 0)) / Math.max(0.4, 1 - (s.dmgReduction || 0)) * (1 + (s.regenPct || 0) * 12);
+    const crit = 1 + Math.min(0.95, s.critChance || 0) * Math.max(0, (s.critDmg || 1.75) - 1);
+    const atk = s.ad * s.attackSpeed * crit;
+    const mag = s.ap * s.attackSpeed * 0.55 * (1 + (s.manaRegen || 0) / 12);
+    const dps = (atk + mag) * (1 + (s.trueDmgBonus || 0)) * (s.dmgDealtMult || 1) * (1 + (s.lifesteal || 0) * 0.5);
+    return Math.sqrt(Math.max(1, ehp) * Math.max(1, dps));
+  }
+  function teamPower(statsList) {
+    const sum = statsList.reduce((a, s) => a + unitPower(s), 0);
+    return Math.round(sum * sum / 100);
+  }
+
   FE.Engine = {
+    unitPower, teamPower,
     computeStats, synergyTier, orderTier, generateActMap, generateHorde, rollAffix,
     generateTerrain, terrainAt, tileBlocked, nearestPassable, COOP_SCALE: CO,
     createCombat, updateCombat, updateFx, combatReport

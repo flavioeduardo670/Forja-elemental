@@ -347,14 +347,14 @@
 
   /* ---------------- MAPA ------------------------------------------------------ */
   const NODE_TYPES = {
-    combate: { name: 'Combate', icon: '⚔️', color: '#94a3b8', desc: 'Horda padrão. Ouro, XP e chance de item.' },
-    elite: { name: 'Elite', icon: '💀', color: '#f87171', desc: 'Comandante com afixos. Relíquia garantida.' },
-    chefe: { name: 'Chefe', icon: '👑', color: '#facc15', desc: 'Guardião do Ato com mecânicas próprias.' },
-    forja: { name: 'Forja Rúnica', icon: '⚒️', color: '#fbbf24', desc: 'Escolha 1 de 3 itens ou aprimore um item.' },
-    santuario: { name: 'Santuário', icon: '🔮', color: '#c084fc', desc: 'Bênçãos elementais e pactos arriscados.' },
-    acampamento: { name: 'Acampamento', icon: '🏕️', color: '#34d399', desc: 'Repare a Cidadela, treine ou saqueie.' },
-    mercador: { name: 'Mercador', icon: '🛒', color: '#38bdf8', desc: 'Compre itens, relíquias e serviços.' },
-    misterio: { name: 'Mistério', icon: '❓', color: '#e2e8f0', desc: 'Um encontro inesperado. Risco e recompensa.' }
+    combate: { name: 'Combate', icon: '⚔️', color: '#94a3b8', desc: 'Horda padrão. Ouro, XP e chance de item.', reward: '🪙 ouro • 📘 XP • 🎁 30% de chance de item ★1' },
+    elite: { name: 'Elite', icon: '💀', color: '#f87171', desc: 'Comandante com afixos. Relíquia garantida.', reward: '🪙 ouro +30 • 📘 XP ×1,45 • 🎁 item ★1 garantido • 🏺 escolha de 1 relíquia' },
+    chefe: { name: 'Chefe', icon: '👑', color: '#facc15', desc: 'Guardião do Ato com mecânicas próprias.', reward: '🪙 ouro +60 • 📘 XP ×1,75 • 🎁 item ★2 para cada jogador • 🏺 relíquia (rara/lendária) • ❤️ Cidadela +25 • próximo Ato' },
+    forja: { name: 'Forja Rúnica', icon: '⚒️', color: '#fbbf24', desc: 'Escolha 1 de 3 itens ou aprimore um item.', reward: '🎁 1 item à escolha (★2 possível no Ato III+) ou +1 tier num item seu' },
+    santuario: { name: 'Santuário', icon: '🔮', color: '#c084fc', desc: 'Bênçãos elementais e pactos arriscados.', reward: '💠 +1 elemento em todo o campo, ou ⭐ +2 PE, ou 🩸 ouro em troca de Cidadela' },
+    acampamento: { name: 'Acampamento', icon: '🏕️', color: '#34d399', desc: 'Repare a Cidadela, treine ou saqueie.', reward: '❤️ Cidadela, 📘 XP de treino ou 🪙 ouro (escolha 1)' },
+    mercador: { name: 'Mercador', icon: '🛒', color: '#38bdf8', desc: 'Compre itens, relíquias e serviços.', reward: '🛒 compre itens, 1 relíquia, reparos e PE com o seu ouro' },
+    misterio: { name: 'Mistério', icon: '❓', color: '#e2e8f0', desc: 'Um encontro inesperado. Risco e recompensa.', reward: '❔ evento aleatório: relíquia, unidade grátis, elementos, itens… às vezes com um preço' }
   };
 
   /* ---------------- META-PROGRESSÃO E ASCENSÃO -------------------------------- */
@@ -405,5 +405,25 @@
     ilhas: { name: 'Ilhas Flutuantes', icon: '🏝️', acts: [4], desc: 'Ilhas de pedra sobre o abismo, ligadas por pontes estreitas.' }
   };
 
-  FE.Data = { EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
+  /* ---------------- ESCALA DE PODER DOS INIMIGOS ------------------------------
+     Razão alvo = Poder da horda ÷ Poder do seu exército (ver engine.teamPower).
+     As razões crescem por Ato porque a métrica subestima efeitos tardios
+     (queimadura, cadeias, invocações). Valores calibrados com tests/sim.js. */
+  const SCALING = {
+    modes: {
+      classica: { name: 'Clássica', icon: '📈', desc: 'Curva fixa por sala. Previsível, mas fica fácil no meio de cada Ato e os Chefes viram paredes.' },
+      nivelada: { name: 'Nivelada', icon: '🪞', desc: 'Inimigos acompanham o nível e os stacks elementais das suas melhores unidades. Nunca ficam para trás.' },
+      proporcional: { name: 'Proporcional', icon: '⚖️', desc: 'Cada horda é montada para uma fração fixa do Poder do seu exército. Dificuldade estável do início ao fim.' },
+      dinamica: { name: 'Dinâmica', icon: '🔥', desc: 'Proporcional + Medidor de Ameaça: vitórias fáceis aumentam a Ameaça (inimigos mais fortes e recompensas maiores); derrotas a reduzem.', recommended: true }
+    },
+    targets: {
+      combate: [0.45, 1.3, 2.8, 4.2],
+      elite: [0.65, 2.0, 3.2, 5.2],
+      chefe: [1.2, 2.6, 2.4, 6.0]
+    },
+    kMin: 0.6, kMax: 4.5, ascPer: 0.08, coopMult: [2.0, 3.0, 3.6, 3.8],
+    threatMin: -3, threatMax: 10, threatPer: 0.07, rewardPer: 0.06
+  };
+
+  FE.Data = { SCALING, EPILOGUE, CONFIG, ARCHETYPES, SKILLS, ELEMENTS, ORDERS, RELICS, RARITY, ITEMS, STAT_LABELS, ARENA, ACTS, BOSSES, ELITE_AFFIXES, NODE_TYPES, META_UPGRADES, ASCENSIONS, TERRAIN, LAYOUTS };
 })(typeof window !== 'undefined' ? window : globalThis);

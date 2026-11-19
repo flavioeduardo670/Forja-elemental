@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forja Elemental 2.2 — Auto-Battler Tático Roguelike</title>
+  <title>Forja Elemental 2.3 — Auto-Battler Tático Roguelike</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Inter:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
@@ -14,7 +14,7 @@
     <div class="brand">
       <div class="brand-icon">⚔</div>
       <div class="brand-text">
-        <h1>FORJA ELEMENTAL<small>2.2</small></h1>
+        <h1>FORJA ELEMENTAL<small>2.3</small></h1>
         <span id="hud-act">Ato I • Floresta Cinzenta</span>
       </div>
     </div>
@@ -36,6 +36,7 @@
           <span class="xp-strategy-tag" id="hud-strategy">—</span>
         </div>
       </div>
+      <div class="threat-pill" id="threat-pill"></div>
       <div class="relics-bar" id="hud-relics"></div>
       <button class="icon-btn" id="btn-map" data-tip="Ver o mapa do Ato (tecla M)">🗺️ Mapa <kbd>M</kbd></button>
       <button class="icon-btn" id="btn-ach" data-tip="Conquistas">🏆 <span id="hud-ach">0</span></button>
@@ -69,8 +70,11 @@
           <span class="chip terrain" id="terrain-chip">🌾 Planície</span>
           <span class="chip affix" id="affix-chip">🌿 Campo Neutro</span>
         </div>
+        <div class="power-panel" id="power-panel"></div>
+        <div class="reward-strip" id="reward-strip"></div>
         <div class="canvas-container" id="canvas-container">
           <canvas id="battle-canvas"></canvas>
+          <div class="combat-banner" id="combat-banner"></div>
           <div class="boss-bar" id="boss-bar"><div class="bb-name" id="bb-name"></div><div class="bb-track"><div class="bb-fill" id="bb-fill"></div><div class="bb-shield" id="bb-shield"></div></div></div>
           <div class="pause-overlay" id="pause-overlay">⏸️ PAUSADO<small>Pressione P para continuar</small></div>
           <div class="board-overlay" id="board-overlay">

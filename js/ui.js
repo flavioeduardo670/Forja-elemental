@@ -8,7 +8,7 @@
   const FE = root.FE, D = FE.Data, C = D.CONFIG, G = FE.Game, R = FE.Render;
   const $ = (id) => document.getElementById(id);
   const esc = FE.util.esc;
-  const UI = FE.UI = { drag: null, inspectEnemyId: null, synTab: 'el', modalKind: null, mapDismissed: false, lastPhase: null, codexTab: 'guia', evoUnitId: null, titleAsc: 0 };
+  const UI = FE.UI = { drag: null, inspectEnemyId: null, synTab: 'el', modalKind: null, mapDismissed: false, lastPhase: null, codexTab: 'guia', evoUnitId: null, titleAsc: 0, titleScaling: 'dinamica' };
   const USER_MODALS = ['evo', 'codex', 'meta', 'settings', 'menu', 'ach', 'credits', 'give'];
   const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -156,6 +156,7 @@
     ov.classList.toggle('show', showOv);
     $('overlay-text').textContent = r.board.length ? 'Ajuste composição, itens e evoluções. Depois escolha o próximo caminho.' : 'Recrute unidades na loja abaixo e depois escolha o primeiro caminho.';
     $('log-badge').textContent = r.phase === 'PREP' ? `Sala ${r.room}` : '';
+    refreshPowerPanel(); refreshRewardStrip(); refreshThreat();
   }
 
   /* ======================= SINERGIAS ======================= */
@@ -192,6 +193,62 @@
       (active.length ? `<div class="syn-section"><span>Ativas</span></div>${active.map(e => card(e, false)).join('')}` : '') +
       (partial.length ? `<div class="syn-section"><span>Em progresso</span></div>${partial.map(e => card(e, true)).join('')}` : '') +
       `<div class="syn-section"><span>Disponíveis</span><span>passe o mouse</span></div>${idle.map(e => card(e, true)).join('')}`;
+  }
+
+  /* ======================= PODER, AMEAÇA E RECOMPENSAS ======================= */
+  const SCL = D.SCALING;
+  /* Razão "justa" calibrada para o momento (sem Ascensão nem Ameaça) */
+  function fairRatio() {
+    const r = G.run, i = Math.min(3, r.act - 1);
+    let t = (SCL.targets[r.roomType] || SCL.targets.combate)[i];
+    if (r.players.length > 1) t *= SCL.coopMult[i] * (1 + (3 - r.players.length) * 0.14);
+    return t;
+  }
+  UI.difficulty = function () {
+    const r = G.run;
+    if (!r || !r.enemies.length || !r.board.length) return null;
+    const pp = G.playerPower(), ep = G.enemyPower();
+    const rel = (ep / Math.max(1, pp)) / fairRatio();
+    const lv = rel < 0.6 ? ['Muito fácil', '#34d399'] : rel < 0.85 ? ['Fácil', '#86efac'] : rel < 1.2 ? ['Equilibrado', '#fbbf24'] : rel < 1.6 ? ['Difícil', '#fb923c'] : ['Mortal', '#ef4444'];
+    return { pp, ep, rel, label: lv[0], color: lv[1] };
+  };
+  function refreshPowerPanel() {
+    const el = $('power-panel'), r = G.run;
+    const d = r.phase === 'PREP' ? UI.difficulty() : null;
+    if (!d) { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    const share = Math.round(100 / (1 + d.rel));
+    const mode = SCL.modes[r.scaling || 'classica'];
+    el.innerHTML = `<div class="pp-side"><span class="pp-lbl">Seu exército</span><b class="emerald-text">⚔ ${fmt(d.pp)}</b></div>
+      <div class="pp-mid" ${tipAttr(`<b>Comparação de Poder</b><br>Poder = √(vida efetiva × dano por segundo) de cada unidade; o poder do time cresce com o quadrado da soma (mais unidades contam muito).<br><br>Dificuldade estimada: <b style="color:${d.color}">${d.label}</b> (comparada ao esperado para esta sala).<br>Escala de poder: ${mode.icon} <b>${mode.name}</b> — ${mode.desc}`)}>
+        <div class="pp-bar"><div class="pp-you" style="width:${share}%"></div><div class="pp-foe" style="width:${100 - share}%"></div></div>
+        <div class="pp-diff" style="color:${d.color}">${d.label} <span class="muted">• ${mode.icon} ${mode.name}</span></div></div>
+      <div class="pp-side right"><span class="pp-lbl">Horda</span><b class="crimson-text">${fmt(d.ep)} ☠</b></div>`;
+  }
+  function refreshRewardStrip() {
+    const el = $('reward-strip'), r = G.run;
+    if (r.phase !== 'PREP' || !r.enemies.length) { el.style.display = 'none'; return; }
+    const pv = G.previewRewards();
+    el.style.display = 'grid';
+    const each = G.isCoop() ? ' cada' : '';
+    const item = r.roomType === 'combate' ? `🎁 ${Math.round(pv.item.chance * 100)}% de chance de item ★1` : r.roomType === 'elite' ? '🎁 item ★1 garantido' : `🎁 item ★2 para ${G.isCoop() ? 'cada jogador' : 'você'}`;
+    const relic = pv.relic ? `<span class="rw hl">🏺 escolha de relíquia${pv.relic === 'boss' ? ' (rara/lendária)' : ''}</span>` : '';
+    const bonus = pv.mult > 1 ? `<span class="rw bonus" ${tipAttr('Bônus do Medidor de Ameaça (modo Dinâmica): quanto mais você domina, mais os inimigos endurecem — e mais você ganha.')}>🔥 +${Math.round((pv.mult - 1) * 100)}% pela Ameaça</span>` : '';
+    el.innerHTML = `<div class="rw-row win"><span class="rw-title">🏆 Se vencer</span>
+        <span class="rw">🪙 +${pv.gold}g${each} <small>(+${pv.interest}g juros)</small></span>
+        <span class="rw">📘 +${pv.xpEach} XP/unidade <small>(+${pv.killXp} por abate)</small></span>
+        <span class="rw">${item}</span>${relic}${pv.act ? '<span class="rw hl">🌄 próximo Ato + ❤️ 25</span>' : ''}${bonus}</div>
+      <div class="rw-row lose"><span class="rw-title">💥 Se perder</span>
+        <span class="rw">❤️ cerca de −${pv.defeat.citadel} de Cidadela</span><span class="rw">📘 +${pv.defeat.xpEach} XP/unidade</span><span class="rw">🔁 tenta a sala de novo</span></div>`;
+  }
+  function refreshThreat() {
+    const el = $('threat-pill'), r = G.run;
+    if (!r || r.scaling !== 'dinamica') { el.style.display = 'none'; return; }
+    const t = r.threat || 0;
+    el.style.display = 'flex';
+    const pct = Math.round((t - SCL.threatMin) / (SCL.threatMax - SCL.threatMin) * 100);
+    el.innerHTML = `<span class="label">🔥 Ameaça</span><span class="value" style="color:${t >= 6 ? '#f87171' : t >= 3 ? '#fb923c' : t < 0 ? '#38bdf8' : '#fde68a'}">${t > 0 ? '+' : ''}${t}</span><div class="threat-meter"><div style="width:${pct}%"></div></div>`;
+    el.setAttribute('data-tip', `<b>Medidor de Ameaça</b> (escala Dinâmica)<br>Inimigos: <b>${t >= 0 ? '+' : ''}${Math.round(SCL.threatPer * t * 100)}%</b> de poder • Recompensas: <b>+${Math.round(SCL.rewardPer * Math.max(0, t) * 100)}%</b> de ouro e XP<br><br>Vitória dominante (sem baixas, &lt;14s): +2<br>Vitória confortável: +1<br>Vitória por pouco: −1 • Derrota: −2<br>Novo Ato: −1${t >= 6 ? '<br><br>⚠️ Ameaça 6+: elites ganham um afixo extra.' : ''}`);
   }
 
   /* ======================= BANCO ======================= */
@@ -369,7 +426,16 @@
     if (!r) { if (UI.modalKind !== 'title') showTitle(); return; }
     if (USER_MODALS.includes(UI.modalKind) || UI.modalKind === 'title') { if (UI.modalKind === 'evo') renderEvo(); if (UI.modalKind === 'meta') renderMeta(); return; }
     if (r.phase === 'END') { if (UI.modalKind !== 'end') showEnd(); return; }
-    if (r.phase === 'CHOICE') { showPending(); return; }
+    if (r.phase === 'CHOICE') {
+      const p = G.currentPending();
+      const c = G.combat;
+      if (p && p.kind === 'report' && c && c.overAt && Date.now() - c.overAt < 1500 && UI.modalKind !== 'pending') {
+        showBanner(p);
+        clearTimeout(UI.reportT); UI.reportT = setTimeout(() => UI.syncModal(), 1500 - (Date.now() - c.overAt));
+        return;
+      }
+      showPending(); return;
+    }
     if (r.phase === 'MAP') {
       if (UI.modalKind === 'pending' || UI.modalKind === 'end') { $('modal').classList.remove('open'); UI.modalKind = null; }
       if (UI.modalKind === 'map') { showMap(); return; }
@@ -407,6 +473,7 @@
           <div class="form-row"><label>Modo de jogo</label><div class="asc-list">${modeBtns}</div>
             <span class="muted" style="font-size:11.5px;">${UI.titleMode > 1 ? `Co-op local: os jogadores se revezam no mesmo aparelho (teclas 1–${UI.titleMode} ou os botões acima do tabuleiro). ${C.COOP_TOTAL_UNITS} unidades no total, ${C.COOP_TOTAL_UNITS / UI.titleMode} por jogador; cada um tem ouro, banco e mochila próprios. Inimigos ficam mais numerosos e fortes.` : 'Você controla toda a expedição.'}</span>${names}</div>
           <div class="form-row"><label>Ascensão (dificuldade)</label><div class="asc-list" id="asc-list">${ascBtns}</div><span class="muted" style="font-size:11.5px;" id="asc-desc">${D.ASCENSIONS[UI.titleAsc].desc}</span></div>
+          <div class="form-row"><label>Escala de poder dos inimigos</label><div class="scale-list">${Object.entries(D.SCALING.modes).map(([k, md]) => `<button class="scale-btn ${UI.titleScaling === k ? 'active' : ''}" data-scaling="${k}"><b>${md.icon} ${md.name}${md.recommended ? ' <span class="rec">recomendado</span>' : ''}</b><span>${md.desc}</span></button>`).join('')}</div></div>
           <div class="form-row"><label>Seed (opcional — mesma seed, mesmo mapa e hordas)</label><input class="input" id="seed-input" maxlength="24" placeholder="Deixe vazio para aleatória" /></div>
           <div class="info-box daily-box"><div><b>📅 Desafio Diário</b> — mesma seed para todos hoje, Ascensão I, modo solo.<br><span class="muted">${daily ? `Seu melhor hoje: Sala ${daily.room}/${C.TOTAL_ROOMS}${daily.win ? ' • 👑 vencido!' : ''} (${daily.tries} tentativa${daily.tries > 1 ? 's' : ''})` : 'Você ainda não jogou o desafio de hoje.'}</span></div>
             <button class="btn btn-secondary" data-act="daily">Jogar desafio</button></div>
@@ -421,6 +488,7 @@
           <button class="btn btn-primary btn-lg" data-act="new-run">⚔️ Nova Expedição</button></div>`
     });
     body.querySelectorAll('[data-asc]').forEach(b => b.addEventListener('click', () => { UI.titleAsc = +b.dataset.asc; showTitle(fromMenu); }));
+    body.querySelectorAll('[data-scaling]').forEach(b => b.addEventListener('click', () => { UI.titleScaling = b.dataset.scaling; showTitle(fromMenu); }));
     body.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { UI.titleMode = +b.dataset.mode; showTitle(fromMenu); }));
     body.querySelectorAll('[data-name]').forEach(i => i.addEventListener('input', () => { UI.titleNames[+i.dataset.name] = i.value; }));
     $('title-logo').addEventListener('click', () => UI.anvilClick());
@@ -433,8 +501,8 @@
       UI.mapDismissed = false; UI.inspectEnemyId = null; G.selectedId = null;
       $('modal').classList.remove('open'); UI.modalKind = null; UI.refresh();
     };
-    f.querySelector('[data-act="new-run"]').addEventListener('click', () => start({ seed: $('seed-input').value, ascension: UI.titleAsc, players: UI.titleMode, names: UI.titleNames }));
-    body.querySelector('[data-act="daily"]').addEventListener('click', () => start({ seed: 'DIA-' + dk, players: 1, daily: { date: dk, ascension: 1 } }));
+    f.querySelector('[data-act="new-run"]').addEventListener('click', () => start({ seed: $('seed-input').value, ascension: UI.titleAsc, players: UI.titleMode, names: UI.titleNames, scaling: UI.titleScaling }));
+    body.querySelector('[data-act="daily"]').addEventListener('click', () => start({ seed: 'DIA-' + dk, players: 1, daily: { date: dk, ascension: 1 }, scaling: 'dinamica' }));
     const cont = f.querySelector('[data-act="continue"]');
     if (cont) cont.addEventListener('click', () => { $('combat-log').innerHTML = ''; UI.prevTiers = {}; UI.prevTiersReady = false; G.loadRun(); $('modal').classList.remove('open'); UI.modalKind = null; UI.mapDismissed = false; UI.refresh(); });
     const back = f.querySelector('[data-act="close"]');
@@ -464,7 +532,9 @@
       const p = pos[n.id], t = D.NODE_TYPES[n.type];
       const isCur = r.nodeId === n.id, isAv = avail.has(n.id), isVis = visited.has(n.id);
       const rad = n.type === 'chefe' ? 30 : 23;
-      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
+      let rwTxt = t.reward;
+      if (['combate', 'elite', 'chefe'].includes(n.type) && r.phase === 'MAP') { const pv = G.previewRewards(n.type, n.room); rwTxt = `🪙 ~${pv.gold}g${G.isCoop() ? ' cada' : ''} • 📘 ~${pv.pool} XP${G.isCoop() ? ' (sua parte)' : ''} a dividir • ${n.type === 'combate' ? '🎁 30% item' : n.type === 'elite' ? '🎁 item + 🏺 relíquia' : '🎁 item ★2 + 🏺 relíquia + 🌄 Ato'}`; }
+      const tip = `<b>${t.icon} ${t.name}</b> — Sala ${n.room}<br>${t.desc}<br><span style="color:#fde68a">Recompensa: ${rwTxt}</span>${(n.type === 'combate' || n.type === 'elite') ? `<br>Arena: ${D.ARENA[n.affix].icon} ${D.ARENA[n.affix].name} (${D.ARENA[n.affix].desc})` : ''}${n.layout ? `<br>Terreno: ${D.LAYOUTS[n.layout].icon} <b>${D.LAYOUTS[n.layout].name}</b> — ${D.LAYOUTS[n.layout].desc}` : ''}${n.type === 'chefe' ? `<br><br><b>${D.BOSSES[n.act].name}</b>: ${D.BOSSES[n.act].mechanic}` : ''}`;
       nodes += `<g class="map-node ${isAv ? 'reachable' : ''}" data-node="${n.id}" ${tipAttr(tip)} opacity="${!isAv && !isVis && !isCur ? 0.55 : 1}">
         ${isAv ? `<circle class="ring" cx="${p.x}" cy="${p.y}" r="${rad + 6}" fill="none" stroke="${t.color}"/>` : ''}
         <circle class="body" cx="${p.x}" cy="${p.y}" r="${rad}" fill="${isVis ? '#2a2f45' : '#18233c'}" stroke="${isCur ? '#fbbf24' : t.color}" stroke-width="${isCur ? 4 : 2}"/>
@@ -481,8 +551,7 @@
       body: `<div class="acts-bar">${actsBar}</div><div class="map-wrap"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif">${floorsLbl}${edges}${nodes}</svg></div>
         <div class="map-info">
           <div class="info-box"><h4>👑 Guardião do Ato</h4><b>${boss.symbol} ${boss.name}</b><br>${boss.mechanic}</div>
-          <div class="info-box"><h4>Legenda</h4><div class="legend">${Object.values(D.NODE_TYPES).map(t => `<span>${t.icon} ${t.name}</span>`).join('')}</div>
-            <div style="margin-top:6px;">Salas não-combate não dão XP de combate, mas oferecem recursos. Dica: prepare-se (itens, PE) antes de clicar.</div></div>
+          <div class="info-box"><h4>O que cada sala dá</h4><div class="legend-rewards">${Object.values(D.NODE_TYPES).map(t => `<div><b>${t.icon} ${t.name}</b><span>${t.reward}</span></div>`).join('')}</div></div>
         </div>`,
       footer: `<span>Cidadela ❤️ ${r.citadelHp}/${r.citadelMax} • ${G.isCoop() ? r.players.map(p => `<span style="color:${p.color}">${esc(p.name)} ${p.gold}g</span>`).join(' • ') : `Ouro ${G.me().gold}g`}</span><button class="btn btn-secondary" data-act="close">👀 Ver tabuleiro (preparar)</button>`
     });
@@ -528,6 +597,15 @@
     if (sk) sk.addEventListener('click', () => G.skipPending());
   }
 
+  function showBanner(p) {
+    const b = $('combat-banner');
+    if (b.dataset.shown === String(G.combat.overAt)) return;
+    b.dataset.shown = String(G.combat.overAt);
+    b.className = 'combat-banner show ' + (p.won ? 'win' : 'lose');
+    b.innerHTML = p.won ? `<span>${G.run.roomType === 'chefe' || p.final ? '👑' : '🏆'}</span>${p.final ? 'A FORJA FOI SALVA' : p.title.replace(/^\S+\s/, '').toUpperCase()}` : '<span>💥</span>DERROTA';
+    setTimeout(() => { b.className = 'combat-banner'; }, 1450);
+  }
+
   function showStory(p) {
     openModal('pending', {
       title: p.title, closable: false, size: 'narrow',
@@ -540,12 +618,46 @@
   function showReport(p) {
     const rep = p.report || [];
     const coop = G.isCoop();
+    const rw = p.rewards || null;
+    const P = (pid) => G.P(pid);
+    const pname = (pid) => coop ? `<b style="color:${P(pid).color}">${esc(P(pid).name)}</b> ` : '';
+    let cards = '';
+    if (rw) {
+      if (rw.won) {
+        cards += `<div class="rcard gold"><div class="rc-ic">🪙</div><div class="rc-body"><h4>Ouro</h4>${rw.gold.map(g => `<div class="rc-line">${pname(g.pid)}<b class="big">+${g.total}g</b> <small>${g.base} recompensa + ${g.interest} juros${g.trans ? ` + ${g.trans} Transmutação` : ''}</small><span class="rc-now">agora: ${g.now}g</span></div>`).join('')}
+          ${rw.mult > 1 ? `<div class="rc-note">🔥 inclui +${Math.round((rw.mult - 1) * 100)}% pela Ameaça</div>` : ''}<div class="rc-note">Juros: 10% do ouro guardado (máx. ${C.INTEREST_CAP}g).</div></div></div>`;
+      }
+      if (rw.won) {
+        cards += `<div class="rcard items"><div class="rc-ic">🎁</div><div class="rc-body"><h4>Itens</h4>${rw.items.length ? rw.items.map(it => `<div class="rc-line">${pname(it.pid)}<span class="item-pill t${it.item.tier}">${D.ITEMS[it.item.id].icon} ${D.ITEMS[it.item.id].name} ${'★'.repeat(it.item.tier)}</span><small>${it.label} • foi para a mochila</small></div>`).join('') : '<div class="rc-line muted">Nenhum item desta vez <small>(${Math.round(C.NORMAL_ITEM_DROP * 100)}% de chance em combates comuns)</small>.</div>'}</div></div>`;
+        if (rw.relic) cards += `<div class="rcard relic"><div class="rc-ic">🏺</div><div class="rc-body"><h4>Relíquia</h4><div class="rc-line">Você escolherá <b>1 de 3 relíquias</b> ${rw.relic === 'boss' ? '(maior chance de rara/lendária)' : ''} na próxima tela.</div></div></div>`;
+      }
+      const xpRows = (rw.units || []).map((u, i) => {
+        const up = u.lvlAfter > u.lvlBefore;
+        const from = Math.round(u.xpBefore / u.nextBefore * 100), to = Math.round(u.xpAfter / u.nextAfter * 100);
+        return `<div class="xp-row" ${coop ? `style="--pc:${P(u.owner).color}"` : ''}><span class="xp-name">${u.symbol} ${esc(u.name)}</span>
+          <span class="xp-lvl">${up ? `<b class="lvlup">⬆ Nv.${u.lvlBefore} → ${u.lvlAfter}</b>` : `Nv.${u.lvlAfter}`}</span>
+          <div class="xp-track"><div class="xp-fill" data-from="${up ? 0 : from}" data-to="${to}" style="width:${up ? 0 : from}%"></div></div>
+          ${up ? `<span class="pe-chip">+${u.lvlAfter - u.lvlBefore} PE</span>` : `<span class="xp-pct">${u.xpAfter}/${u.nextAfter}</span>`}</div>`;
+      }).join('');
+      cards += `<div class="rcard xp wide"><div class="rc-ic">📘</div><div class="rc-body"><h4>Experiência</h4>
+        <div class="rc-note">${rw.xp.filter(x => x.n).map(x => `${pname(x.pid)}${x.each} XP para cada uma de ${x.n} unidade(s)`).join(' • ')} ${rw.won ? `• +${rw.killXp} XP por abate` : '• 45% do XP (treino)'}</div>${xpRows}
+        ${(rw.units || []).some(u => u.lvlAfter > u.lvlBefore) ? '<div class="rc-note">⭐ Cada nível dá 1 Ponto de Evolução — use em <b>Evoluir</b> antes da próxima luta.</div>' : ''}</div></div>`;
+      if (rw.threat) {
+        const t = rw.threat, d = t.after - t.before;
+        cards += `<div class="rcard threat"><div class="rc-ic">🔥</div><div class="rc-body"><h4>Ameaça</h4><div class="rc-line"><b class="big">${t.before} → ${t.after}</b> <small>${t.why}${d ? ` (${d > 0 ? '+' : ''}${d})` : ''}</small></div>
+          <div class="rc-note">Próximas salas: inimigos ${t.after >= 0 ? '+' : ''}${Math.round(SCL.threatPer * t.after * 100)}% • recompensas +${Math.round(SCL.rewardPer * Math.max(0, t.after) * 100)}%</div></div></div>`;
+      }
+      if (rw.citadel) cards += `<div class="rcard citadel ${rw.citadel.delta < 0 ? 'bad' : ''}"><div class="rc-ic">🏰</div><div class="rc-body"><h4>Cidadela</h4><div class="rc-line"><b class="big">${rw.citadel.delta > 0 ? '+' : ''}${rw.citadel.delta}</b> <small>${rw.citadel.hp}/${rw.citadel.max}</small></div><div class="mini-bar"><div style="width:${Math.round(rw.citadel.hp / rw.citadel.max * 100)}%"></div></div></div></div>`;
+      const ex = rw.extras.filter(e => !/^Sem item/.test(e.text));
+      if (ex.length) cards += `<div class="rcard extras wide"><div class="rc-body">${ex.map(e => `<div class="rc-line ${e.dim ? 'muted' : ''}">${e.icon} ${e.text}</div>`).join('')}</div></div>`;
+    } else cards = `<div class="report-lines">${p.lines.map(l => `<div>${l}</div>`).join('')}</div>`;
+
     const maxD = Math.max(1, ...rep.map(x => x.dmgDealt)), maxT = Math.max(1, ...rep.map(x => x.dmgTaken)), maxH = Math.max(1, ...rep.map(x => x.healDone));
     const mvp = rep.slice().sort((a, b) => (b.dmgDealt + b.healDone) - (a.dmgDealt + a.healDone))[0];
     const bar = (v, m, c) => `<div class="bar-cell"><div class="bar" style="width:${Math.round(v / m * 90)}px;background:${c}"></div><span>${fmt(v)}</span></div>`;
     const sorted = coop ? rep.slice().sort((a, b) => a.owner - b.owner || b.dmgDealt - a.dmgDealt) : rep;
-    const rows = sorted.map(x => { const pc = coop ? G.P(x.owner).color : ''; return `<tr ${coop ? `style="box-shadow: inset 3px 0 0 ${pc}"` : ''}><td>${x.symbol} ${esc(x.name)} ${x === mvp ? '👑' : ''} ${x.survived ? '' : '<span class="dead-tag">✖ caiu</span>'}</td>
-      <td>${bar(x.dmgDealt, maxD, '#f59e0b')}</td><td>${bar(x.dmgTaken, maxT, '#ef4444')}</td><td>${bar(x.healDone, maxH, '#10b981')}</td><td>${x.kills}</td></tr>`; }).join('');
+    const rows = sorted.map(x => `<tr ${coop ? `style="box-shadow: inset 3px 0 0 ${P(x.owner).color}"` : ''}><td>${x.symbol} ${esc(x.name)} ${x === mvp ? '👑' : ''} ${x.survived ? '' : '<span class="dead-tag">✖ caiu</span>'}</td>
+      <td>${bar(x.dmgDealt, maxD, '#f59e0b')}</td><td>${bar(x.dmgTaken, maxT, '#ef4444')}</td><td>${bar(x.healDone, maxH, '#10b981')}</td><td>${x.kills}</td></tr>`).join('');
     let team = '';
     if (coop) {
       const tot = G.run.players.map(pl => { const mine = rep.filter(x => x.owner === pl.id); return { pl, d: mine.reduce((s, x) => s + x.dmgDealt, 0), h: mine.reduce((s, x) => s + x.healDone, 0), k: mine.reduce((s, x) => s + x.kills, 0) }; });
@@ -553,13 +665,14 @@
       team = `<div class="team-totals">${tot.map(t => `<div class="team-card" style="--pc:${t.pl.color}"><b>${esc(t.pl.name)} ${t === best && t.d + t.h > 0 ? '🏅' : ''}</b><span>⚔️ ${fmt(t.d)} • 💚 ${fmt(t.h)} • ☠️ ${t.k}</span></div>`).join('')}</div>`;
     }
     openModal('pending', {
-      title: p.title, sub: `Duração do combate: ${p.time ? p.time.toFixed(1) : '?'}s`, closable: false,
-      body: `<div class="report-lines">${p.lines.map(l => `<div>${l}</div>`).join('')}</div>
-        ${p.levelUps && p.levelUps.length ? `<div style="margin-bottom:12px;">${p.levelUps.map(l => `<span class="lvl-chip">⭐ ${esc(l)}</span>`).join('')}</div>` : ''}
-        ${team}
-        <table class="report-table"><thead><tr><th>Unidade</th><th>Dano causado</th><th>Dano sofrido</th><th>Cura/Escudo</th><th>Abates</th></tr></thead><tbody>${rows}</tbody></table>`,
-      footer: `<span>Invocações (torretas, lobos, esqueletos) têm o dano creditado ao dono.</span><button class="btn btn-primary" data-act="next">${p.final ? 'Ver o desfecho →' : 'Continuar →'}</button>`
+      title: p.title, sub: `Duração do combate: ${p.time ? p.time.toFixed(1) : '?'}s${mvp ? ` • MVP: ${mvp.symbol} ${esc(mvp.name)}` : ''}`, closable: false, size: 'wide',
+      body: `<div class="reward-cards">${cards}</div>
+        <details class="stats-details"><summary>📊 Estatísticas do combate (dano, cura e abates por unidade)</summary>${team}
+        <table class="report-table"><thead><tr><th>Unidade</th><th>Dano causado</th><th>Dano sofrido</th><th>Cura/Escudo</th><th>Abates</th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="muted" style="font-size:11px;margin-top:6px;">Invocações (torretas, lobos, esqueletos) têm o dano creditado ao dono.</div></details>`,
+      footer: `<span>${p.won ? (G.run.pending.length > 1 ? `A seguir: ${G.run.pending[1].kind === 'choice' ? '🏺 escolha de recompensa' : G.run.pending[1].kind === 'story' ? '📖 história do próximo Ato' : '…'}` : 'A seguir: 🗺️ escolha do próximo caminho') : 'A seguir: 🔁 nova tentativa nesta sala'}</span><button class="btn btn-primary btn-lg" data-act="next">${p.final ? 'Ver o desfecho →' : 'Continuar →'}</button>`
     });
+    setTimeout(() => document.querySelectorAll('.xp-fill').forEach(f => { f.style.width = f.dataset.to + '%'; }), 120);
     $('modal-footer').querySelector('[data-act="next"]').addEventListener('click', () => G.skipPending());
   }
 
@@ -678,10 +791,12 @@
         <div class="setting-row"><div><b>Volume</b></div><input type="range" min="0" max="100" value="${Math.round(s.volume * 100)}" id="vol"/></div>
         ${row('fx', 'Efeitos visuais', 'Partículas, ondas e números flutuantes no combate (desligue em aparelhos lentos).')}
         ${row('autoEvo', 'Abrir Evolução automaticamente', 'Ao entrar numa sala com PE disponíveis.')}
+        ${G.run ? `<div class="setting-row col"><div><b>Escala de poder</b><div class="muted" style="font-size:11.5px;">Vale a partir da próxima sala.</div></div><div class="scale-list compact">${Object.entries(D.SCALING.modes).map(([k, md]) => `<button class="scale-btn ${G.run.scaling === k ? 'active' : ''}" data-setscale="${k}" ${tipAttr(md.desc)}><b>${md.icon} ${md.name}</b></button>`).join('')}</div></div>` : ''}
         <div class="setting-row"><div><b>Abandonar expedição</b><div class="muted" style="font-size:11.5px;">Encerra a run atual sem Fragmentos.</div></div><button class="btn btn-danger" data-act="abandon" ${G.run && G.run.phase !== 'COMBAT' ? '' : 'disabled'}>Abandonar</button></div>`,
       footer: `<span>Atalhos: Espaço iniciar/pronto • P pausar • S velocidade • A auto-posicionar • E evoluir • M mapa • C códice • 1–4 jogador • Esc fechar</span><button class="btn btn-primary" data-act="close">Fechar</button>`
     });
     body.querySelectorAll('[data-toggle]').forEach(t => t.addEventListener('click', () => { s[t.dataset.toggle] = !s[t.dataset.toggle]; FE.applySettings(); UI.openSettings(); }));
+    body.querySelectorAll('[data-setscale]').forEach(b => b.addEventListener('click', () => { G.setScaling(b.dataset.setscale); UI.toast(`Escala de poder: ${D.SCALING.modes[b.dataset.setscale].name}`, 'success'); UI.openSettings(); UI.refresh(); }));
     $('vol').addEventListener('input', (e) => { s.volume = e.target.value / 100; FE.applySettings(); });
     body.querySelector('[data-act="abandon"]').addEventListener('click', (e) => {
       if (e.target.dataset.armed) { G.abandonRun(); $('modal').classList.remove('open'); UI.modalKind = null; UI.refresh(); return; }
@@ -694,7 +809,7 @@
   UI.openCodex = function (tab, onBack) {
     if (tab) UI.codexTab = tab;
     if (onBack !== undefined) UI.codexBack = onBack;
-    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['notas', '📝 Notas da Versão']];
+    const tabs = [['guia', '🧭 Como Jogar'], ['arq', '⚔️ Arquétipos'], ['sin', '✦ Sinergias'], ['ter', '🏞️ Terrenos'], ['rel', '🏺 Relíquias'], ['itm', '🎒 Itens'], ['ini', '👹 Inimigos'], ['rw', '🎁 Recompensas'], ['esc', '📈 Escala de Poder'], ['notas', '📝 Notas da Versão']];
     let content = '';
     const t = UI.codexTab;
     if (t === 'guia') content = `<div class="codex-prose">
@@ -726,8 +841,29 @@
     if (t === 'ini') content = `<div class="codex-grid">${[1, 2, 3, 4].map(a => `<div class="codex-card"><h4>${D.ACTS[a].short} — ${D.ACTS[a].name}</h4><div style="font-size:16px;letter-spacing:3px;">${Object.values(D.ACTS[a].faction).map(f => `<span title="${f[0]}">${f[1]}</span>`).join(' ')}</div><div><b>${D.BOSSES[a].symbol} ${D.BOSSES[a].name}:</b> ${D.BOSSES[a].mechanic}</div></div>`).join('')}
       ${Object.values(D.ELITE_AFFIXES).map(f => `<div class="codex-card"><h4 style="color:${f.color}">${f.icon} Afixo de Elite: ${f.name}</h4><div>${f.desc}</div></div>`).join('')}
       <div class="codex-card"><h4>⛈️ Tempestade da Forja</h4><div>Após 50s de combate, todas as unidades sofrem dano crescente — impede impasses.</div></div></div>`;
+    if (t === 'rw') content = `<div class="codex-prose">
+      <h3>De onde vem o poder do seu exército</h3>
+      <ul><li><b>🪙 Ouro</b> — cada vitória paga uma recompensa base (cresce com a sala; elite +30, chefe +60) mais <b>juros de 10%</b> do ouro guardado (máx. ${C.INTEREST_CAP}g). Use para comprar unidades, rolar a loja e subir o limite do time. Em co-op, cada jogador recebe a sua parte.</li>
+      <li><b>📘 XP</b> — a vitória gera um bolo de XP dividido igualmente entre as unidades em campo (menos unidades = mais XP cada) + bônus por abate. Elites dão ×1,45 e chefes ×1,75. Derrota ainda dá 45% do XP (treino).</li>
+      <li><b>⭐ Nível e PE</b> — cada nível aumenta os atributos da unidade e dá <b>1 Ponto de Evolução</b>, gasto em <b>Evoluir</b> para habilidades e talentos.</li>
+      <li><b>🎁 Itens</b> — combates comuns têm 30% de chance de item ★1; elites garantem um; chefes dão ★2 para cada jogador. Itens iguais se fundem em tiers maiores.</li>
+      <li><b>🏺 Relíquias</b> — escolha 1 de 3 após elites e chefes (chefes favorecem raras/lendárias). Também aparecem em Mistérios e no Mercador.</li>
+      <li><b>❤️ Cidadela</b> — sua vida da expedição. Derrotas tiram Cidadela (mais em salas difíceis) e você tenta de novo; chefes vencidos devolvem 25.</li>
+      <li><b>🔥 Bônus de Ameaça</b> — na escala Dinâmica, cada ponto positivo de Ameaça dá +${Math.round(D.SCALING.rewardPer * 100)}% de ouro e XP.</li></ul>
+      <p>Antes de cada luta, a faixa <b>“Se vencer / Se perder”</b> acima do tabuleiro mostra exatamente o que está em jogo, e o mapa mostra a recompensa de cada sala ao passar o mouse. Depois da luta, o relatório separa tudo em cartões: ouro (com a conta), XP por unidade com barras, itens, relíquia, Ameaça e Cidadela.</p></div>`;
+    if (t === 'esc') content = `<div class="codex-prose">
+      <h3>Escalas de poder</h3><p>Define como os inimigos acompanham a força do seu exército. Escolha na tela inicial; pode trocar em ⚙️ Configurações durante a expedição.</p>
+      ${Object.values(D.SCALING.modes).map(md => `<p><b>${md.icon} ${md.name}</b>${md.recommended ? ' (recomendada)' : ''} — ${md.desc}</p>`).join('')}
+      <h3>Como o poder é medido</h3>
+      <p>Poder de uma unidade = √(vida efetiva × dano por segundo), contando armadura, resistência mágica, itens, relíquias, sinergias e nível. O poder do time é o <b>quadrado da soma</b> (lei de Lanchester): 6 unidades médias valem bem mais que 3 fortes. A barra <b>Seu exército × Horda</b> compara os dois e indica se a luta está Fácil, Equilibrada, Difícil ou Mortal para o momento da campanha.</p>
+      <p>Nas escalas adaptativas o jogo mede a força do seu <b>elenco inteiro</b> (inclusive o banco) ao entrar na sala — então guardar unidades fortes no banco não engana o sistema, e espalhar XP entre mais unidades não é punido. A correção é suave (raiz quadrada, limitada entre ×${D.SCALING.kMin} e ×${D.SCALING.kMax}), para que boas decisões ainda sejam recompensadas.</p></div>`;
     if (t === 'notas') content = `<div class="codex-prose">
-      <h3>v2.2 — novidades</h3>
+      <h3>v2.3 — novidades</h3>
+      <ul><li><b>4 escalas de poder</b> para os inimigos: Clássica, Nivelada, Proporcional e <b>Dinâmica</b> (com Medidor de Ameaça que endurece os inimigos — e aumenta as recompensas — quando você domina).</li>
+      <li><b>Barra de poder</b> Seu exército × Horda com dificuldade estimada antes de cada luta.</li>
+      <li><b>Recompensas claras</b>: faixa “Se vencer / Se perder”, recompensas no mapa, relatório em cartões com a conta do ouro, barras de XP animadas por unidade e subidas de nível.</li>
+      <li><b>Visual</b>: tremor de tela em impactos, cortes corpo a corpo, rastros de projéteis, fantasmas ao morrer, flash de dano, halo e selo de nível nas unidades, água/lava animadas, vinheta e faixa de Vitória/Derrota.</li></ul>
+      <h3>v2.2</h3>
       <ul><li><b>Modo cooperativo local</b> para 2, 3 ou 4 jogadores: ${C.COOP_TOTAL_UNITS} unidades divididas, ouro/banco/mochila por jogador, sistema de Pronto, escolhas em rodízio, doações e relatório por jogador.</li>
       <li><b>Campanha ampliada</b>: 4 Atos × 6 salas = ${C.TOTAL_ROOMS} salas. Novo <b>Ato IV — Coração da Forja</b> com facção própria, mapa <i>Ilhas Flutuantes</i> e o chefe final <b>Ferreiro Primordial</b>. Introduções de história a cada Ato, epílogo e créditos.</li>
       <li><b>Rebalanceamento</b> completo com o simulador (solo, co-op e todas as Ascensões).</li>

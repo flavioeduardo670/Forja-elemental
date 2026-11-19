@@ -99,7 +99,7 @@
   const unready = (pid) => { const p = G.P(pid); if (p) p.ready = false; };
 
   /* ---------------- CRIAÇÃO / SAVE / LOAD ---------------- */
-  G.newRun = function ({ seed, ascension = 0, players = 1, names = [], daily = null } = {}) {
+  G.newRun = function ({ seed, ascension = 0, players = 1, names = [], daily = null, scaling = 'dinamica' } = {}) {
     const seedStr = (seed && String(seed).trim().toUpperCase()) || FE.util.randomSeedString();
     const seedNum = FE.util.hashStr(seedStr);
     const asc = daily ? daily.ascension : Math.max(0, Math.min(ascension, G.meta.maxAscension));
@@ -126,7 +126,8 @@
       stats: { kills: 0, elites: 0, bosses: 0, combats: 0, wins: 0, losses: 0, goldEarned: 0 },
       phase: 'MAP', pending: [], afterPending: 'MAP', ended: null,
       terrain: '.'.repeat(C.COLS * C.ROWS), layout: 'planicie', roomTypesSeen: [], noLoss: true,
-      flags: { galinha: seedStr === 'GALINHA', eggWins: 0 }
+      flags: { galinha: seedStr === 'GALINHA', eggWins: 0 },
+      scaling: D.SCALING.modes[scaling] ? scaling : 'dinamica', threat: 0, scale: null
     };
     G.run.map = withRng(r => E.generateActMap(r, 1, asc));
     G.meta.records.runs++; if (n > 1) G.meta.records.coopRuns++;
@@ -472,6 +473,7 @@
       relocateBlocked();
       r.enemies = withRng(rng => E.generateHorde(rng, r.room, r.act, node.type, r.ascension, r.terrain, G.coop()));
       if (r.flags.galinha) r.enemies.forEach(e => { e.symbol = e.isBoss ? '🐓' : '🐔'; if (!e.isBoss) e.name = 'Galinha ' + e.name.split(' ')[0]; });
+      applyScaling(node.type);
       log(`🗺️ Terreno: ${D.LAYOUTS[r.layout].icon} ${D.LAYOUTS[r.layout].name} — ${D.LAYOUTS[r.layout].desc}`);
       r.phase = 'PREP';
       if (node.type === 'chefe') { sfx('bossGong'); log(`👑 ${D.BOSSES[r.act].name}: ${D.BOSSES[r.act].mechanic}`, 'danger'); }
@@ -524,6 +526,89 @@
     changed();
   };
 
+  /* Poder atual do exército em campo e da horda da sala */
+  G.playerPower = function () {
+    const ctxs = G.run.players.map(p => G.statsCtx(p.id));
+    return E.teamPower(G.run.board.map(u => G.statsOf(u, ctxs[u.owner || 0])));
+  };
+  G.enemyPower = function (enemies) { return E.teamPower((enemies || G.run.enemies).map(e => G.enemyStats(e))); };
+
+  /* ---------------- ESCALA DE PODER ADAPTATIVA ----------------
+     O poder do jogador é medido ao entrar na sala, usando as MELHORES
+     unidades de cada jogador (campo + banco, até o limite), para que não
+     dê para "esconder" o exército no banco e enganar a escala. */
+  const SC = D.SCALING;
+  G.rosterPower = function () {
+    const all = [];
+    for (const p of G.run.players) {
+      const ctx = G.statsCtx(p.id);
+      all.push(...G.unitsOf(p.id).map(u => E.unitPower(G.statsOf(u, ctx))).sort((a, b) => b - a).slice(0, p.teamLimit));
+    }
+    const sum = all.reduce((a, b) => a + b, 0);
+    return Math.round(sum * sum / 100);
+  };
+  G.isAdaptive = () => G.run && (G.run.scaling === 'proporcional' || G.run.scaling === 'dinamica');
+  G.rewardMult = () => (G.run && G.run.scaling === 'dinamica' ? 1 + SC.rewardPer * Math.max(0, G.run.threat || 0) : 1);
+  G.targetRatio = function (type) {
+    const r = G.run;
+    const t = (SC.targets[type] || SC.targets.combate)[Math.min(3, r.act - 1)];
+    return t * (1 + SC.ascPer * r.ascension) * (r.players.length > 1 ? SC.coopMult[Math.min(3, r.act - 1)] * (1 + (3 - r.players.length) * 0.14) : 1) * (r.scaling === 'dinamica' ? 1 + SC.threatPer * (r.threat || 0) : 1);
+  };
+  G.setScaling = function (mode) {
+    if (!G.run || !SC.modes[mode]) return;
+    G.run.scaling = mode;
+    log(`${SC.modes[mode].icon} Escala de poder: ${SC.modes[mode].name} (vale a partir da próxima sala).`, 'gold');
+    G.save(); changed();
+  };
+  function applyScaling(type) {
+    const r = G.run, mode = r.scaling || 'classica';
+    const pp = G.rosterPower(), ep0 = G.enemyPower();
+    const info = { mode, pp, ep0, k: 1, target: null };
+    if (mode === 'nivelada') {
+      const units = G.allUnits().slice().sort((a, b) => b.level - a.level).slice(0, Math.max(1, r.players.reduce((s, p) => s + p.teamLimit, 0)));
+      const avgLvl = units.length ? units.reduce((s, u) => s + u.level, 0) / units.length : 1;
+      const avgSt = units.length ? units.reduce((s, u) => s + Object.values(u.elements).reduce((a, b) => a + b, 0), 0) / units.length : 0;
+      const els = Object.keys(D.ELEMENTS);
+      withRng(rng => {
+        for (const e of r.enemies) {
+          const want = e.isBoss ? Math.ceil(avgLvl) : e.isElite ? Math.round(avgLvl) : Math.round(avgLvl * 0.85);
+          e.level = Math.max(e.level, want);
+          for (let i = 0; i < Math.floor(avgSt * 0.3); i++) { const el = rng.pick(els); e.elements[el] = (e.elements[el] || 0) + 1; }
+        }
+      });
+    } else if (mode === 'proporcional' || mode === 'dinamica') {
+      const target = G.targetRatio(type);
+      const k = Math.max(SC.kMin, Math.min(SC.kMax, Math.sqrt(target * pp / Math.max(1, ep0))));
+      for (const e of r.enemies) {
+        const b = e.baseStats;
+        e.baseStats = { ...b, maxHp: Math.round(b.maxHp * k), ad: Math.round(b.ad * k), ap: Math.round(b.ap * k) };
+      }
+      info.k = k; info.target = target;
+      if (mode === 'dinamica' && (r.threat || 0) >= 6) withRng(rng => {
+        const el = r.enemies.find(e => e.isElite && !e.isBoss);
+        if (el && el.affixes.length < 3) el.affixes.push(rng.pick(Object.keys(D.ELITE_AFFIXES).filter(a => !el.affixes.includes(a))));
+      });
+    }
+    info.ep = G.enemyPower();
+    info.ratio = info.ep / Math.max(1, pp);
+    r.scale = info;
+  }
+  /* Ameaça (modo Dinâmica): sobe com vitórias dominantes, cai com derrotas */
+  function updateThreat(won, report, time) {
+    const r = G.run;
+    if (r.scaling !== 'dinamica') return null;
+    const lost = report.filter(x => !x.survived).length / Math.max(1, report.length);
+    let d = 0, why = '';
+    if (!won) { d = -2; why = 'derrota'; }
+    else if (lost === 0 && time < 14) { d = 2; why = 'vitória dominante'; }
+    else if (lost <= 0.25) { d = 1; why = 'vitória confortável'; }
+    else if (lost >= 0.6) { d = -1; why = 'vitória por pouco'; }
+    else why = 'vitória equilibrada';
+    const before = r.threat || 0;
+    r.threat = Math.max(SC.threatMin, Math.min(SC.threatMax, before + d));
+    return { before, after: r.threat, why };
+  }
+
   G.togglePause = function () {
     if (!G.run || G.run.phase !== 'COMBAT') return;
     G.paused = !G.paused; changed();
@@ -536,13 +621,39 @@
     if (G.run.phase === 'COMBAT' && !c.over) {
       let rem = dt;
       while (rem > 0 && !c.over) { const step = Math.min(0.025, rem); E.updateCombat(c, step); rem -= step; }
-      if (c.over && !c.handled) { c.handled = true; finishCombat(c); }
+      if (c.over && !c.handled) { c.handled = true; c.overAt = Date.now(); finishCombat(c); }
     }
     E.updateFx(c, dt);
   };
 
   G.emitAch = (ev) => { if (FE.Achievements) FE.Achievements.check(ev); };
   const rollItem = (tier) => withRng(rng => ({ id: rng.pick(Object.keys(D.ITEMS)), tier }));
+
+  /* Base de ouro de uma vitória (antes do fator co-op e da Ameaça) */
+  function goldBase(type, room) {
+    let base = 42 + room * 9 + (type === 'elite' ? 30 : 0) + (type === 'chefe' ? 60 : 0);
+    if (G.hasRelic('cofre_mercador')) base += 15;
+    if (type === 'chefe' && G.meta.upgrades.relicStart > 1) base += G.meta.upgrades.relicStart * 10;
+    return base;
+  }
+  /* Prévia de recompensas de uma sala de combate (usada no mapa e na preparação) */
+  G.previewRewards = function (type = G.run.roomType, room = G.run.room) {
+    const r = G.run, rm = G.rewardMult(), me = G.me();
+    const savedType = r.roomType, savedRoom = r.room;
+    r.roomType = type; r.room = room;
+    const pool = Math.round(G.playerXpPool() * rm);
+    r.roomType = savedType; r.room = savedRoom;
+    const n = Math.max(1, G.boardOf(me.id).length);
+    return {
+      gold: Math.round(goldBase(type, room) * G.goldFactor() * rm),
+      interest: Math.min(C.INTEREST_CAP, Math.floor(me.gold * C.INTEREST_RATE)),
+      xpEach: Math.floor(pool / n), pool, killXp: 16 + room * 3, mult: rm,
+      item: type === 'combate' ? { chance: C.NORMAL_ITEM_DROP, tier: 1 } : type === 'elite' ? { chance: 1, tier: 1 } : { chance: 1, tier: 2, each: true },
+      relic: type === 'elite' ? 'elite' : type === 'chefe' ? 'boss' : null,
+      act: type === 'chefe' && room < C.TOTAL_ROOMS,
+      defeat: { citadel: Math.max(10, Math.round((r.enemies.length || 4) * 6 / Math.sqrt(G.coop())) + r.act * 4), xpEach: Math.floor(pool * 0.45 / n) }
+    };
+  };
 
   function finishCombat(c) {
     const r = G.run;
@@ -551,10 +662,14 @@
     G.emitAch({ type: 'combat', won: res.won, time: res.time, report, roomType: r.roomType, room: r.room, act: r.act, layout: r.layout,
       boardSize: r.board.length, losses: report.filter(x => !x.survived).length, maxSummons: c.maxPlayerSummons, coop: G.coop() });
     if (!res.won) r.noLoss = false;
+    // Instantâneo de XP/nível antes das recompensas (para as barras animadas)
+    const snap = new Map(r.board.map(u => [u.id, { level: u.level, xp: u.xp }]));
     const levelUps = [];
     const killXp = 16 + r.room * 3;
     const lines = [];
     const gf = G.goldFactor();
+    const rm = G.rewardMult();
+    const rewards = { won: res.won, mult: rm, gold: [], xp: [], killXp, items: [], relic: null, extras: [], citadel: null, units: [], threat: null };
 
     for (const rep of report) {
       const u = G.find(rep.rosterId);
@@ -562,68 +677,77 @@
       const p = G.P(rep.owner); p.kills += rep.kills; p.dmg += rep.dmgDealt; p.heal += rep.healDone;
     }
     r.stats.kills += report.reduce((s, x) => s + x.kills, 0);
-    const pool = G.playerXpPool();
+    const pool = Math.round(G.playerXpPool() * rm);
+    const th = updateThreat(res.won, report, res.time);
+    rewards.threat = th;
     const splitXp = (mult) => {
-      const per = [];
       for (const p of r.players) {
         const mine = G.boardOf(p.id);
-        if (!mine.length) { per.push(0); continue; }
+        if (!mine.length) { rewards.xp.push({ pid: p.id, each: 0, n: 0 }); continue; }
         const each = Math.floor(pool * mult / mine.length);
         for (const u of mine) { const g = G.grantXp(u, each); if (g) levelUps.push(`${u.name} → Nv.${u.level}`); }
-        per.push(each);
+        rewards.xp.push({ pid: p.id, each, n: mine.length });
       }
-      return per;
+    };
+    const finishUnits = () => {
+      rewards.units = r.board.map(u => {
+        const b = snap.get(u.id) || { level: u.level, xp: 0 };
+        return { id: u.id, name: u.name, symbol: G.arch(u).symbol, color: G.arch(u).color, owner: u.owner || 0,
+          lvlBefore: b.level, xpBefore: b.xp, nextBefore: G.xpToNext(b.level), lvlAfter: u.level, xpAfter: u.xp, nextAfter: G.xpToNext(u.level), pe: u.evoPoints };
+      });
     };
 
     if (res.won) {
       sfx('victory');
       r.stats.wins++;
-      let base = 42 + r.room * 9 + (r.roomType === 'elite' ? 30 : 0) + (r.roomType === 'chefe' ? 60 : 0);
-      if (G.hasRelic('cofre_mercador')) base += 15;
-      if (r.roomType === 'chefe' && G.meta.upgrades.relicStart > 1) base += G.meta.upgrades.relicStart * 10;
-      const gold = Math.round(base * gf);
+      const gold = Math.round(goldBase(r.roomType, r.room) * gf * rm);
       for (const p of r.players) {
         const interest = Math.min(C.INTEREST_CAP, Math.floor(p.gold * C.INTEREST_RATE));
         const trans = G.boardOf(p.id).reduce((s, u) => s + (u.skills.al_transmutar || 0) * 8, 0);
         p.gold += gold + interest + trans; r.stats.goldEarned += gold + interest + trans;
-        lines.push(`🪙 ${G.isCoop() ? `<b style="color:${p.color}">${p.name}</b>: ` : ''}+${gold}g de recompensa, +${interest}g de juros${trans ? `, +${trans}g de Transmutação` : ''}`);
+        rewards.gold.push({ pid: p.id, base: gold, interest, trans, total: gold + interest + trans, now: p.gold });
+        lines.push(`🪙 ${G.isCoop() ? p.name + ': ' : ''}+${gold}g, +${interest}g de juros${trans ? `, +${trans}g Transmutação` : ''}`);
       }
-      const per = splitXp(1);
-      lines.push(G.isCoop()
-        ? `📘 XP por unidade: ${r.players.map((p, i) => `${p.name} ${per[i]}`).join(' • ')} (+${killXp} por abate)`
-        : `📘 +${per[0]} XP para cada uma das ${r.board.length} unidade(s) em campo (+${killXp} XP por abate)`);
-      log(`🏆 Sala ${r.room} vencida! +${gold}g por jogador.`, 'win');
+      splitXp(1);
+      log(`🏆 Sala ${r.room} vencida! +${gold}g${G.isCoop() ? ' por jogador' : ''}.`, 'win');
 
       const pend = [];
-      const giveItem = (pid, it, label) => { G.P(pid).bag.push(it); lines.push(`🎁 ${label}${G.isCoop() ? ` (${G.P(pid).name})` : ''}: ${D.ITEMS[it.id].icon} ${D.ITEMS[it.id].name}${it.tier > 1 ? ' ★' + it.tier : ''}`); };
-      if (r.roomType === 'combate' && withRng(rng => rng.chance(C.NORMAL_ITEM_DROP))) giveItem(nextChooser(), rollItem(1), 'Item encontrado');
-      if (r.roomType === 'elite') { r.stats.elites++; giveItem(nextChooser(), rollItem(1), 'Item de Elite'); pend.push(makeRelicChoice('elite')); }
+      const giveItem = (pid, it, label) => { G.P(pid).bag.push(it); rewards.items.push({ pid, item: it, label }); lines.push(`🎁 ${label}: ${D.ITEMS[it.id].name}`); };
+      if (r.roomType === 'combate') {
+        if (withRng(rng => rng.chance(C.NORMAL_ITEM_DROP))) giveItem(nextChooser(), rollItem(1), 'Item encontrado');
+        else rewards.extras.push({ icon: '🎲', text: `Sem item desta vez (chance de ${Math.round(C.NORMAL_ITEM_DROP * 100)}% em combates comuns).`, dim: true });
+      }
+      if (r.roomType === 'elite') { r.stats.elites++; giveItem(nextChooser(), rollItem(1), 'Item de Elite'); pend.push(makeRelicChoice('elite')); rewards.relic = 'elite'; }
       if (G.hasRelic('ovo_dourado')) {
         r.flags.eggWins++;
         if (r.flags.eggWins >= 3) {
           r.relics = r.relics.filter(x => x !== 'ovo_dourado'); r.relics.push('pintinho_dourado');
-          lines.push('🐣 O Ovo Dourado chocou! Um Pintinho Dourado agora acompanha o grupo.');
+          rewards.extras.push({ icon: '🐣', text: 'O Ovo Dourado chocou! Um Pintinho Dourado agora acompanha o grupo.' });
           G.secret('chocadeira');
-        } else lines.push(`🥚 O Ovo Dourado se mexe... (${r.flags.eggWins}/3)`);
+        } else rewards.extras.push({ icon: '🥚', text: `O Ovo Dourado se mexe... (${r.flags.eggWins}/3)` });
       }
       if (r.roomType === 'chefe') {
         r.stats.bosses++;
         for (const p of r.players) giveItem(p.id, rollItem(2), 'Espólio do Chefe');
-        if (G.hasRelic('lanterna_ancestral')) { r.board.forEach(u => u.evoPoints++); lines.push('🏮 Lanterna Ancestral: +1 PE para todo o campo'); }
+        rewards.relic = 'boss';
+        if (G.hasRelic('lanterna_ancestral')) { r.board.forEach(u => u.evoPoints++); rewards.extras.push({ icon: '🏮', text: 'Lanterna Ancestral: +1 PE para todo o campo.' }); }
+        finishUnits();
         if (r.room >= C.TOTAL_ROOMS) {
-          r.pending.unshift({ kind: 'report', won: true, final: true, title: '👑 A Forja foi salva!', lines, levelUps, report, time: res.time });
+          r.pending.unshift({ kind: 'report', won: true, final: true, title: '👑 A Forja foi salva!', lines, levelUps, report, time: res.time, rewards });
           r.afterPending = 'END'; r.phase = 'CHOICE'; changed();
           return;
         }
         pend.push(makeRelicChoice('boss'));
-        r.act++; r.nodeId = null;
+        r.act++; r.nodeId = null; if (r.scaling === 'dinamica') r.threat = Math.max(SC.threatMin, (r.threat || 0) - 1);
         r.map = withRng(rng => E.generateActMap(rng, r.act, r.ascension));
         r.citadelHp = Math.min(r.citadelMax, r.citadelHp + 25);
-        lines.push(`🏰 Novo Ato: ${D.ACTS[r.act].name}. Cidadela +25.`);
+        rewards.citadel = { delta: 25, hp: r.citadelHp, max: r.citadelMax };
+        rewards.extras.push({ icon: D.ACTS[r.act].storyIcon, text: `Novo Ato desbloqueado: ${D.ACTS[r.act].short} — ${D.ACTS[r.act].name}.` });
         log(`🌄 ${D.ACTS[r.act].short} — ${D.ACTS[r.act].name}!`, 'gold');
         pend.push(storyAct(r.act));
       }
-      r.pending.unshift({ kind: 'report', won: true, title: r.roomType === 'chefe' ? '👑 Chefe Derrotado!' : '🏆 Vitória!', lines, levelUps, report, time: res.time });
+      finishUnits();
+      r.pending.unshift({ kind: 'report', won: true, title: r.roomType === 'chefe' ? '👑 Chefe Derrotado!' : r.roomType === 'elite' ? '💀 Elite Derrotada!' : '🏆 Vitória!', lines, levelUps, report, time: res.time, rewards });
       r.pending.push(...pend);
       r.afterPending = 'MAP';
       r.enemies = [];
@@ -632,17 +756,27 @@
       r.stats.losses++;
       const dmg = Math.max(10, Math.round(res.survivors * 6 / Math.sqrt(G.coop())) + r.act * 4);
       r.citadelHp = Math.max(0, r.citadelHp - dmg);
-      const per = splitXp(0.45);
+      splitXp(0.45);
+      rewards.citadel = { delta: -dmg, hp: r.citadelHp, max: r.citadelMax };
       lines.push(`🏰 A Cidadela sofreu -${dmg} (${r.citadelHp}/${r.citadelMax})`);
-      lines.push(`📘 XP de treino por unidade: ${per.filter(x => x).join(' / ') || 0}`);
       log(`💥 Derrota na Sala ${r.room}: Cidadela -${dmg}.`, 'danger');
       if (r.citadelHp <= 0) return endRun(false, report);
       r.attempt++;
-      r.pending.unshift({ kind: 'report', won: false, title: '💥 Derrota', lines: [...lines, '🔁 Ajuste a composição e tente a sala novamente.'], levelUps, report, time: res.time });
+      finishUnits();
+      // Na escala adaptativa a horda é reavaliada para a nova tentativa
+      if (G.isAdaptive()) { reScaleForRetry(); rewards.extras.push({ icon: '⚖️', text: `A horda foi reajustada à Ameaça atual (${r.threat >= 0 ? '+' : ''}${r.threat}).` }); }
+      r.pending.unshift({ kind: 'report', won: false, title: '💥 Derrota', lines, levelUps, report, time: res.time, rewards });
       r.afterPending = 'PREP';
     }
     r.phase = 'CHOICE';
     G.save(); changed();
+  }
+  function reScaleForRetry() {
+    const r = G.run;
+    if (!r.scale || !r.scale.k) return;
+    const back = 1 / r.scale.k;
+    for (const e of r.enemies) { const b = e.baseStats; e.baseStats = { ...b, maxHp: Math.round(b.maxHp * back), ad: Math.round(b.ad * back), ap: Math.round(b.ap * back) }; }
+    applyScaling(r.roomType);
   }
 
   function endRun(victory, report) {
