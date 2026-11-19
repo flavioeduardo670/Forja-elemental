@@ -1,0 +1,38 @@
+[
+ {
+  "args": [
+   20,
+   0,
+   1,
+   "dinamica"
+  ],
+  "json": "{\"ai\":\"smart\",\"mode\":\"dinamica\",\"runs\":20,\"asc\":0,\"players\":1,\"errors\":0,\"winRate\":\"0.40\",\"avgRoom\":\"19.6\",\"fim\":{\"V\":8,\"A3\":5,\"A4\":5,\"A2\":2},\"maxLvl\":11,\"avgLosses\":\"1.5\",\"doc\":{\"bando\":\"100%/44\",\"muralha\":\"100%/35\",\"enxame\":\"100%/29\",\"chefe\":\"97%/61\",\"emboscada\":\"100%/18\",\"sacerdocio\":\"87%/31\",\"ritual\":\"85%/26\",\"furia\":\"85%/27\",\"artilharia\":\"85%/33\"},\"avgUnits\":\"6.6\"}"
+ },
+ {
+  "args": [
+   10,
+   3,
+   1,
+   "classica"
+  ],
+  "json": "{\"ai\":\"smart\",\"mode\":\"classica\",\"runs\":10,\"asc\":3,\"players\":1,\"errors\":0,\"winRate\":\"0.00\",\"avgRoom\":\"8.1\",\"fim\":{\"A1\":5,\"A3\":2,\"A2\":3},\"maxLvl\":8,\"avgLosses\":\"4.2\",\"doc\":{\"bando\":\"81%/21\",\"muralha\":\"86%/7\",\"enxame\":\"40%/15\",\"chefe\":\"39%/18\",\"emboscada\":\"100%/4\",\"ritual\":\"100%/4\",\"artilharia\":\"83%/6\",\"furia\":\"33%/9\"},\"avgUnits\":\"6.4\"}"
+ },
+ {
+  "args": [
+   8,
+   1,
+   2,
+   "proporcional"
+  ],
+  "json": "{\"ai\":\"smart\",\"mode\":\"proporcional\",\"runs\":8,\"asc\":1,\"players\":2,\"errors\":0,\"winRate\":\"0.13\",\"avgRoom\":\"19.0\",\"fim\":{\"A3\":3,\"V\":1,\"A4\":4},\"maxLvl\":10,\"avgLosses\":\"3.5\",\"doc\":{\"bando\":\"94%/16\",\"muralha\":\"100%/10\",\"artilharia\":\"85%/13\",\"chefe\":\"67%/33\",\"enxame\":\"100%/9\",\"furia\":\"85%/13\",\"emboscada\":\"78%/18\",\"ritual\":\"83%/6\",\"sacerdocio\":\"100%/5\"},\"avgUnits\":\"11.5\"}"
+ },
+ {
+  "args": [
+   8,
+   2,
+   3,
+   "nivelada"
+  ],
+  "json": "{\"ai\":\"smart\",\"mode\":\"nivelada\",\"runs\":8,\"asc\":2,\"players\":3,\"errors\":0,\"winRate\":\"0.00\",\"avgRoom\":\"9.4\",\"fim\":{\"A1\":3,\"A2\":4,\"A3\":1},\"maxLvl\":8,\"avgLosses\":\"6.6\",\"doc\":{\"bando\":\"93%/15\",\"muralha\":\"50%/8\",\"artilharia\":\"40%/5\",\"sacerdocio\":\"67%/6\",\"chefe\":\"20%/30\",\"emboscada\":\"50%/4\",\"ritual\":\"20%/10\",\"enxame\":\"100%/5\",\"furia\":\"67%/3\"},\"avgUnits\":\"12.0\"}"
+ }
+]

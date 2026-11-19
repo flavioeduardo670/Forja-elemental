@@ -51,6 +51,9 @@ namespace ForjaElemental.Core
     {
         public string Id, Name, ArchetypeId, Symbol, Color, Trait, Script, Structure;
         public int Owner, Level = 1, Wave;
+        // Campos do roster do jogador
+        public int Cost, Xp, EvoPoints, Quality;
+        public bool Renamed;
         public double Col, Row, Radius;
         public OrderedDict<int> Elements = new OrderedDict<int>();
         public OrderedDict<int> Skills = new OrderedDict<int>();

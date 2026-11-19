@@ -80,7 +80,7 @@ namespace ForjaElemental.Core
     {
         public string RosterId, Name, Symbol, Color;
         public double DmgDealt, DmgTaken, HealDone;
-        public int Kills, Casts;
+        public int Kills, Casts, Owner;
         public bool Survived;
     }
 
@@ -106,6 +106,9 @@ namespace ForjaElemental.Core
         public List<Projectile> Projectiles = new List<Projectile>();
         public ICombatFx Fx;
         internal int UidSeq;
+        // Preenchidos pela expedição ao iniciar o combate
+        public int StartBoard, StartSyn;
+        public bool Handled;
     }
 
     /// <summary>Port da simulação de combate de js/engine.js §3.</summary>
